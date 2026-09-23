@@ -9,11 +9,13 @@ set(CMAKE_AUTOMOC ON)
 set (update_core_srcs
 	Version.cpp
 	BuildProfile.cpp
+	UpdateTypes.cpp
 )
 
 set (update_core_hdrs
 	Version.h
 	BuildProfile.h
+	UpdateTypes.h
 )
 
 add_library(pebear_update_core STATIC ${update_core_srcs} ${update_core_hdrs})
