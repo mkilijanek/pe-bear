@@ -1,0 +1,17 @@
+2026-09-23T22:14:52Z starting M1 (issues #1-#4: version model, release discovery, download+SHA-256, GUI/state machine) because milestone M1 is the only deliverable milestone in the #1->#7 chain
+
+2026-09-24 M1 delivered: pe-bear/updater/ implements update discovery, compatible-asset
+selection, managed-installation detection, opt-in download, streaming SHA-256 verification,
+settings, the update dialog and the state machine up to ReadyToInstall. Installation itself
+is not attempted: requestInstall() records consent and reports ErrorInstallerUnavailable,
+which is M2/M3 work.
+
+Deviations from the plan, all deliberate:
+- PR #1 planned a separate "test(updater)" commit. Tests ship in the commit with the code
+  they cover instead, so that every commit builds and passes on its own.
+- The build-time package descriptors (PEBEAR_PACKAGE_TYPE, PEBEAR_BUILD_RUNTIME,
+  PEBEAR_MIN_OS_VERSION) were pulled forward from PR #7 into M1: asset selection cannot
+  work without the build declaring what it is. The pe-bear-build.json manifest and the CI
+  that would set these for published packages remain M4.
+- Minimal CMake wiring was necessary to build M1 at all; full packaging integration is M4.
+- A build that does not declare PEBEAR_PACKAGE_TYPE degrades to notify-only, by design.

@@ -12,8 +12,10 @@ set(updater_tests
 	tst_releaseclient
 	tst_installationdetector
 	tst_updatepaths
+	tst_updatesettings
 	tst_packageverifier
 	tst_downloadmanager
+	tst_updatemanager
 	tst_liverelease
 )
 

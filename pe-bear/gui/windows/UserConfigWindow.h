@@ -54,6 +54,15 @@ private:
 	QComboBox reloadFileStates;
 	QCheckBox autoSaveTagsCBox;
 
+#ifdef PEBEAR_WITH_UPDATER
+	/* Settings -> Updates. Installing is not a setting: it is always an
+	   explicit action, so there is deliberately no checkbox for it. */
+	QGroupBox updatesGroup;
+	QCheckBox autoCheckUpdatesCBox;
+	QCheckBox autoDownloadUpdatesCBox;
+	QLabel updatesNote;
+#endif
+
 	MainSettings *settings;
 };
 
