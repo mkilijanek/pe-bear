@@ -104,6 +104,17 @@ set(DISASM_LIB $<TARGET_FILE:libdisasm> CACHE PATH "Disasm library path")
 add_subdirectory(${M_SIGFIND})
 set(SIGFIND_LIB $<TARGET_FILE:sig_finder> CACHE PATH "SigFinder library path")
 
+option(PEBEAR_ENABLE_UPDATER "Build the built-in updater" ON )
+option(PEBEAR_ENABLE_LEGACY_UPDATER "Allow the updater on Qt4/Windows XP builds (unsupported)" OFF )
+option(PEBEAR_BUILD_UPDATER_TESTS "Build the updater unit tests" OFF )
+if(PEBEAR_BUILD_UPDATER_TESTS)
+	# must be called from the top level so that ctest finds the cases
+	enable_testing()
+endif()
+set(PEBEAR_PACKAGE_TYPE "" CACHE STRING "Package type of this build: windows-zip, linux-tar-xz, linux-appimage, macos-app-zip")
+set(PEBEAR_BUILD_RUNTIME "" CACHE STRING "Runtime/toolchain tag of this build, e.g. vs17")
+set(PEBEAR_MIN_OS_VERSION "" CACHE STRING "Lowest OS version this build supports")
+
 # executables
 add_subdirectory(pe-bear)
 
