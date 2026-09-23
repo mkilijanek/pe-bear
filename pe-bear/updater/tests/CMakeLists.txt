@@ -7,6 +7,7 @@ set(CMAKE_AUTOMOC ON)
 
 set(updater_tests
 	tst_version
+	tst_buildprofile
 )
 
 foreach(test_name ${updater_tests})
