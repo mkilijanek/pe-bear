@@ -13,6 +13,9 @@ set (update_core_srcs
 	AssetSelector.cpp
 	InstallationDetector.cpp
 	ReleaseClient.cpp
+	UpdatePaths.cpp
+	DownloadManager.cpp
+	PackageVerifier.cpp
 )
 
 set (update_core_hdrs
@@ -22,6 +25,9 @@ set (update_core_hdrs
 	AssetSelector.h
 	InstallationDetector.h
 	ReleaseClient.h
+	UpdatePaths.h
+	DownloadManager.h
+	PackageVerifier.h
 )
 
 add_library(pebear_update_core STATIC ${update_core_srcs} ${update_core_hdrs})
