@@ -18,7 +18,7 @@ BearVers::BearVers(QString replyString)
 	this->vMajor = strings[0].toInt();
 	this->vMinor = strings[1].toInt();
 	this->vPatch = strings[2].toInt();
-	this->vSub = (strings.length() > 3) ? 0 : strings[3].toInt();
+	this->vSub = (strings.length() > 3) ? strings[3].toInt() : 0;
 	valid = true;
 }
 
