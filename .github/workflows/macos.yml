@@ -34,12 +34,21 @@ jobs:
       # bundle is built against. Installed from the runner's own package
       # manager rather than a third-party action, to keep the dependency
       # surface of a security tool's CI small.
-      - name: Install Qt
-        run: brew install qt
+      - name: Install Qt and Ninja
+        # Ninja is not optional here. With the default Unix Makefiles
+        # generator, `cmake --build --parallel` passes a bare `-j` to make,
+        # which means *unlimited* parallelism -- verified locally:
+        #   cmake --build b --parallel    -> MAKEFLAGS=[s -j]
+        #   cmake --build b --parallel 4  -> MAKEFLAGS=[s -j4 --jobserver-auth]
+        # On capstone's several hundred translation units that exhausts the
+        # runner's memory and the build stops making progress; the first
+        # attempt at this job sat in `Build` for nearly two hours. Ninja
+        # bounds its own job count, and matches what the Linux workflow uses.
+        run: brew install qt ninja
 
       - name: Configure
         run: >
-          cmake -S . -B build
+          cmake -S . -B build -G Ninja
           -DCMAKE_BUILD_TYPE=Release
           -DCMAKE_PREFIX_PATH="$(brew --prefix qt)"
           -DPEBEAR_BUILD_TESTS=ON
