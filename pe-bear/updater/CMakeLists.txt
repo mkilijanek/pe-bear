@@ -18,6 +18,10 @@ set (update_core_srcs
 	PackageVerifier.cpp
 	UpdateSettings.cpp
 	UpdateManager.cpp
+	FileSystem.cpp
+	TransactionTypes.cpp
+	TransactionJournal.cpp
+	Transaction.cpp
 )
 
 set (update_core_hdrs
@@ -32,6 +36,10 @@ set (update_core_hdrs
 	PackageVerifier.h
 	UpdateSettings.h
 	UpdateManager.h
+	FileSystem.h
+	TransactionTypes.h
+	TransactionJournal.h
+	Transaction.h
 )
 
 add_library(pebear_update_core STATIC ${update_core_srcs} ${update_core_hdrs})

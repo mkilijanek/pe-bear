@@ -24,3 +24,17 @@ Deviations from the plan, all deliberate:
 - The PE-bear test suite landed before this stack. Because base/MainSettings.cpp carries the
   updater's settings once the updater is built, every test target that compiles it has to
   link pebear_update_core. Neither change triggers this on its own; only the two together.
+
+2026-10-04T21:29:19Z starting #18 (M2 part 1/3): transaction model and journal, with platform operations behind an interface so the state machine and rollback ordering are testable without a Windows VM
+
+2026-10-04 #18 delivered: model transakcji i journal. TransactionState od Prepared przez
+BackedUp, Activated, Validated do Committed/RolledBack/Failed; journal jeden plik na próbę,
+zapisywany całościowo przez rename, więc po przerwaniu czytelny jest albo stary rekord, albo
+nowy, nigdy mieszanka. Rollback odtwarza kroki w odwrotnej kolejności i kontynuuje po
+nieudanym kroku, kończąc jako RolledBack tylko gdy wszystkie się udały. planRecovery jest
+czystą funkcją rekordu.
+
+Decyzja projektowa z #5 zrealizowana: wszystkie operacje plikowe idą przez IFileSystem.
+FakeFileSystem w testach pozwala wstrzyknąć awarię w dowolnym kroku i w dowolnym wywołaniu,
+czego na prawdziwym systemie plików nie da się zrobić powtarzalnie. Dzięki temu całe #18 jest
+pokryte natywnie, bez Windows.
