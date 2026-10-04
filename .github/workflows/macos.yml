@@ -1,0 +1,74 @@
+# Build and test PE-bear on macOS.
+#
+# Replaces the C/C++ starter workflow that was here, which ran
+# ./configure && make && make check && make distcheck. That is an autotools
+# template; this project is CMake and has never had a configure script, so the
+# very first step could only ever fail.
+name: macOS
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macos-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Qt6
+    runs-on: macos-latest
+
+    steps:
+      # Without submodules the build stops at add_subdirectory(capstone).
+      - name: Check out, including submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      # Homebrew's `qt` formula is Qt6, which is what the published macOS
+      # bundle is built against. Installed from the runner's own package
+      # manager rather than a third-party action, to keep the dependency
+      # surface of a security tool's CI small.
+      - name: Install Qt and Ninja
+        # Ninja is not optional here. With the default Unix Makefiles
+        # generator, `cmake --build --parallel` passes a bare `-j` to make,
+        # which means *unlimited* parallelism -- verified locally:
+        #   cmake --build b --parallel    -> MAKEFLAGS=[s -j]
+        #   cmake --build b --parallel 4  -> MAKEFLAGS=[s -j4 --jobserver-auth]
+        # On capstone's several hundred translation units that exhausts the
+        # runner's memory and the build stops making progress; the first
+        # attempt at this job sat in `Build` for nearly two hours. Ninja
+        # bounds its own job count, and matches what the Linux workflow uses.
+        run: brew install qt ninja
+
+      - name: Configure
+        run: >
+          cmake -S . -B build -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_PREFIX_PATH="$(brew --prefix qt)"
+          -DPEBEAR_BUILD_TESTS=ON
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Test
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: ctest --test-dir build --output-on-failure --no-tests=ignore
+
+      # The macOS build produces an .app bundle; confirming it exists catches a
+      # CMake change that silently stops bundling long before anyone notices a
+      # broken release artifact.
+      - name: Check the application bundle was produced
+        run: |
+          if [ ! -d "build/pe-bear/PE-bear.app" ]; then
+            echo "::error::PE-bear.app was not produced by the build"
+            ls -la build/pe-bear
+            exit 1
+          fi
+          echo "PE-bear.app present"
