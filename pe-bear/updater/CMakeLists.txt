@@ -10,12 +10,18 @@ set (update_core_srcs
 	Version.cpp
 	BuildProfile.cpp
 	UpdateTypes.cpp
+	AssetSelector.cpp
+	InstallationDetector.cpp
+	ReleaseClient.cpp
 )
 
 set (update_core_hdrs
 	Version.h
 	BuildProfile.h
 	UpdateTypes.h
+	AssetSelector.h
+	InstallationDetector.h
+	ReleaseClient.h
 )
 
 add_library(pebear_update_core STATIC ${update_core_srcs} ${update_core_hdrs})

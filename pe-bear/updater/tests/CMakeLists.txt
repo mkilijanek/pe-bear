@@ -8,6 +8,10 @@ set(CMAKE_AUTOMOC ON)
 set(updater_tests
 	tst_version
 	tst_buildprofile
+	tst_assetselector
+	tst_releaseclient
+	tst_installationdetector
+	tst_liverelease
 )
 
 foreach(test_name ${updater_tests})
@@ -18,6 +22,9 @@ foreach(test_name ${updater_tests})
 		Qt${QT_VERSION_MAJOR}::Network
 		Qt${QT_VERSION_MAJOR}::Test
 	)
+	# the checked-in GitHub API fixture, located without a runtime search
+	target_compile_definitions(${test_name} PRIVATE
+		FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data")
 	add_test(NAME ${test_name} COMMAND ${test_name})
 	# QStandardPaths must not write into the developer's real config
 	set_tests_properties(${test_name} PROPERTIES
