@@ -9,6 +9,19 @@
 
 set(CMAKE_AUTOMOC ON)
 
+# The parent directory sets /SUBSYSTEM:WINDOWS /ENTRY:mainCRTStartup on MSVC so
+# the application starts without a console window. CMAKE_EXE_LINKER_FLAGS is
+# directory-scoped, so those flags reach the targets defined here too -- and a
+# QTest binary is a console program: under the GUI subsystem it cannot write its
+# results anywhere ctest can see them.
+#
+# Cleared for this directory only. The PE-bear target is defined in the parent
+# and is not affected.
+if(MSVC)
+	string(REPLACE "/SUBSYSTEM:WINDOWS" "" CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS}")
+	string(REPLACE "/ENTRY:mainCRTStartup" "" CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS}")
+endif()
+
 set(PB "${CMAKE_CURRENT_SOURCE_DIR}/..")
 
 # --- the fixture every PE-dependent suite uses ---
