@@ -15,3 +15,12 @@ Deviations from the plan, all deliberate:
   that would set these for published packages remain M4.
 - Minimal CMake wiring was necessary to build M1 at all; full packaging integration is M4.
 - A build that does not declare PEBEAR_PACKAGE_TYPE degrades to notify-only, by design.
+
+2026-10-04 addendum, written while landing M1 step 4 of 4:
+- Build/test CI now exists (Linux, macOS, Windows) and runs the suites on every push and
+  pull request. It still does not set PEBEAR_PACKAGE_TYPE / PEBEAR_BUILD_RUNTIME /
+  PEBEAR_MIN_OS_VERSION for published artifacts, so asset selection on a released build
+  still degrades to notify-only. That wiring, and pe-bear-build.json, remain M4.
+- The PE-bear test suite landed before this stack. Because base/MainSettings.cpp carries the
+  updater's settings once the updater is built, every test target that compiles it has to
+  link pebear_update_core. Neither change triggers this on its own; only the two together.

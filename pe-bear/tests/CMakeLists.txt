@@ -152,6 +152,14 @@ foreach(test_name ${pebear_tests})
 		Qt${QT_VERSION_MAJOR}::Widgets
 		Qt${QT_VERSION_MAJOR}::Test
 	)
+
+	# base/MainSettings.cpp carries the updater's settings when the updater is
+	# built, so any target compiling it needs the core library. Without this the
+	# link fails on UpdateSettings -- which neither the test suite nor the
+	# updater triggers on its own, only the two together.
+	if(PEBEAR_UPDATER_ACTIVE)
+		target_link_libraries(${test_name} pebear_update_core)
+	endif()
 	add_dependencies(${test_name} bearparser sig_finder libdisasm capstone_static)
 	add_test(NAME ${test_name} COMMAND ${test_name})
 	# the model checks instantiate widgets-adjacent classes; keep them headless
