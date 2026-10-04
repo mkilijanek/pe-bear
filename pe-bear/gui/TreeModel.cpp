@@ -95,7 +95,7 @@ QVariant TreeItem::data(int column) const
 	if (column < 0 || column >= m_itemData.size()) {
 		return QVariant();
 	}
-	return "demo";
+	return m_itemData.at(column);
 }
 
 TreeItem *TreeItem::parentItem()
@@ -191,7 +191,7 @@ QVariant TreeModel::data(const QModelIndex &index, int role) const
 		return QVariant();
 	}
 	if (role != Qt::DisplayRole) {
-		QVariant();
+		return QVariant();
 	}
 	TreeItem *item = static_cast<TreeItem*>(index.internalPointer());
 	if (!item) {

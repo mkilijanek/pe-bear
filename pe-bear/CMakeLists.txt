@@ -33,6 +33,13 @@ else()
 	get_target_property(QtCore_location Qt${QT_VERSION_MAJOR}::Core LOCATION)
 endif()
 
+if(PEBEAR_BUILD_TESTS)
+	if(USE_QT4)
+		message(FATAL_ERROR "PEBEAR_BUILD_TESTS needs Qt5 or Qt6 (QAbstractItemModelTester)")
+	endif()
+	find_package(Qt${QT_VERSION_MAJOR} COMPONENTS Test REQUIRED)
+endif()
+
 include_directories( ${PARSER_INC} )
 include_directories( ${SIGFIND_INC} )
 include_directories( ${DISASM_DIR} ${CAPSTONE_INC})
@@ -340,6 +347,10 @@ if(USE_QT4)
 	target_link_libraries (${PROJECT_NAME} ${QT_QTGUI_LIBRARIES} ${QT_QTCORE_LIBRARIES})
 else()	
 	target_link_libraries (${PROJECT_NAME} Qt${QT_VERSION_MAJOR}::Core Qt${QT_VERSION_MAJOR}::Widgets)
+endif()
+
+if(PEBEAR_BUILD_TESTS)
+	add_subdirectory(tests)
 endif()
 
 install(TARGETS ${PROJECT_NAME}
