@@ -28,9 +28,17 @@
 
 #include "../../ViewSettings.h"
 
+#ifdef PEBEAR_WITH_UPDATER
+	#include "../../updater/gui/UpdateCoordinator.h"
+#endif
+
 //----------------------------------------------
 
+#ifdef PEBEAR_WITH_UPDATER
+class MainWindow : public QMainWindow, public IUnsavedWorkProbe
+#else
 class MainWindow : public QMainWindow
+#endif
 {
 	Q_OBJECT
 
@@ -40,6 +48,11 @@ public:
 
 	bool openPE(QString name);
 	int openMultiplePEs(QStringList fNames);
+
+#ifdef PEBEAR_WITH_UPDATER
+	/* IUnsavedWorkProbe: what an update would cost the user right now. */
+	virtual int countUnsavedItems() const;
+#endif
 	
 signals:
 	void addSectionRequested(PeHandler *peHndl);
@@ -62,6 +75,10 @@ public slots:
 	void searchPattern(PeHandler*);
 
 	void openSignatures();
+
+#ifdef PEBEAR_WITH_UPDATER
+	void checkForUpdates();
+#endif
 
 	void viewSignatures()
 	{
@@ -200,6 +217,12 @@ private:
 		*viewMenu,
 		*signaturesMenu,
 		*fromLoadedPEsMenu;
+
+#ifdef PEBEAR_WITH_UPDATER
+	QMenu *helpMenu;
+	QAction *checkUpdatesAction;
+	UpdateCoordinator *updateCoordinator;
+#endif
 
 	QActionGroup *stylesGroup;
 

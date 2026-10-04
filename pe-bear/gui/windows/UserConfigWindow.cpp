@@ -56,6 +56,23 @@ UserConfigWindow::UserConfigWindow(QWidget *parent)
 	fLayout2->setSizeConstraint(QLayout::SetMaximumSize);
 	
 	autoSaveTagsCBox.setText(tr("Auto-save tags"));
+
+#ifdef PEBEAR_WITH_UPDATER
+	updatesGroup.setTitle(tr("Updates"));
+	autoCheckUpdatesCBox.setText(tr("Check for new versions automatically"));
+	autoCheckUpdatesCBox.setToolTip(tr("Checks at most once a day, in the background."));
+	autoDownloadUpdatesCBox.setText(tr("Download updates automatically"));
+	autoDownloadUpdatesCBox.setToolTip(tr("Only downloads. Installing always asks first."));
+	updatesNote.setText(tr("An update is never installed without your confirmation."));
+	updatesNote.setWordWrap(true);
+
+	QVBoxLayout *updatesLayout = new QVBoxLayout();
+	updatesLayout->addWidget(&autoCheckUpdatesCBox);
+	updatesLayout->addWidget(&autoDownloadUpdatesCBox);
+	updatesLayout->addWidget(&updatesNote);
+	updatesGroup.setLayout(updatesLayout);
+#endif
+
 	QHBoxLayout *buttonLayout = new QHBoxLayout();
 	okButton.setText(tr("Save"));
 	connect(&okButton, SIGNAL(clicked()), this, SLOT(onOkClicked()));
@@ -72,6 +89,9 @@ UserConfigWindow::UserConfigWindow(QWidget *parent)
 	topLayout.addLayout(fLayout3);
 	topLayout.addWidget(&autoSaveTagsCBox);
 	topLayout.addLayout(fLayout2);
+#ifdef PEBEAR_WITH_UPDATER
+	topLayout.addWidget(&updatesGroup);
+#endif
 
 	topLayout.addStretch();
 	topLayout.addLayout(buttonLayout);
@@ -147,6 +167,10 @@ void UserConfigWindow::refreshSettingsView()
 	languageEdit.setCurrentIndex(getLanguageIndex(settings->language));
 	autoSaveTagsCBox.setChecked(settings->isAutoSaveTags());
 	setReloadMode(settings->isReloadOnFileChange());
+#ifdef PEBEAR_WITH_UPDATER
+	autoCheckUpdatesCBox.setChecked(settings->updateSettings().isAutoCheckEnabled());
+	autoDownloadUpdatesCBox.setChecked(settings->updateSettings().isAutoDownloadEnabled());
+#endif
 }
 
 void UserConfigWindow::onOkClicked()
@@ -164,6 +188,10 @@ void UserConfigWindow::onOkClicked()
 
 	const t_reload_mode rMode = getReloadMode();
 	this->settings->setReloadOnFileChange(rMode);
+#ifdef PEBEAR_WITH_UPDATER
+	this->settings->updateSettings().setAutoCheckEnabled(autoCheckUpdatesCBox.isChecked());
+	this->settings->updateSettings().setAutoDownloadEnabled(autoDownloadUpdatesCBox.isChecked());
+#endif
 	this->settings->writePersistent();
 	this->hide();
 	if (langChanged) {

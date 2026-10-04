@@ -16,6 +16,8 @@ set (update_core_srcs
 	UpdatePaths.cpp
 	DownloadManager.cpp
 	PackageVerifier.cpp
+	UpdateSettings.cpp
+	UpdateManager.cpp
 )
 
 set (update_core_hdrs
@@ -28,6 +30,8 @@ set (update_core_hdrs
 	UpdatePaths.h
 	DownloadManager.h
 	PackageVerifier.h
+	UpdateSettings.h
+	UpdateManager.h
 )
 
 add_library(pebear_update_core STATIC ${update_core_srcs} ${update_core_hdrs})

@@ -244,6 +244,19 @@ set (pebear_followable_hdrs
 	gui/followable_table/OffsetedView.h
 )
 
+set (pebear_updater_gui_srcs)
+set (pebear_updater_gui_hdrs)
+if(PEBEAR_UPDATER_ACTIVE)
+	set (pebear_updater_gui_srcs
+		updater/gui/UpdateDialog.cpp
+		updater/gui/UpdateCoordinator.cpp
+	)
+	set (pebear_updater_gui_hdrs
+		updater/gui/UpdateDialog.h
+		updater/gui/UpdateCoordinator.h
+	)
+endif()
+
 set (pebear_windows_srcs
 	gui/windows/PatternSearchWindow.cpp
 	gui/windows/StringsBrowseWindow.cpp
@@ -276,6 +289,7 @@ set (pebear_srcs
 	${pebear_gui_pe_mod_srcs}
 	${pebear_windows_srcs}
 	${pebear_followable_srcs}
+	${pebear_updater_gui_srcs}
 	main.cpp
 )
 
@@ -290,6 +304,7 @@ set (pebear_hdrs
 	${pebear_gui_pe_mod_hdrs}
 	${pebear_windows_hdrs}
 	${pebear_followable_hdrs}
+	${pebear_updater_gui_hdrs}
 )
 
 set (rsrc
@@ -317,6 +332,7 @@ SOURCE_GROUP("Source Files\\base\\threads" FILES ${pebear_threads_srcs} )
 SOURCE_GROUP("Source Files\\gui" FILES ${pebear_gui_srcs} )
 SOURCE_GROUP("Source Files\\gui\\pe_models" FILES ${pebear_gui_pe_mod_srcs} )
 SOURCE_GROUP("Source Files\\gui\\windows" FILES ${pebear_windows_srcs} )
+SOURCE_GROUP("Source Files\\updater\\gui" FILES ${pebear_updater_gui_srcs} )
 SOURCE_GROUP("Source Files\\gui_base" FILES ${pebear_gui_base_srcs} )
 SOURCE_GROUP("Source Files\\Auto Generated" FILES ${pebear_hdrs_moc} ${pebear_rcc_src} )
 
@@ -325,6 +341,7 @@ SOURCE_GROUP("Header Files\\base\\threads" FILES ${pebear_threads_hdrs} )
 SOURCE_GROUP("Header Files\\gui" FILES ${pebear_gui_hdrs} )
 SOURCE_GROUP("Header Files\\gui\\pe_models" FILES ${pebear_gui_pe_mod_hdrs} )
 SOURCE_GROUP("Header Files\\gui\\windows" FILES ${pebear_windows_hdrs} )
+SOURCE_GROUP("Header Files\\updater\\gui" FILES ${pebear_updater_gui_hdrs} )
 SOURCE_GROUP("Header Files\\gui_base" FILES ${pebear_gui_base_hdrs} )
 
 
