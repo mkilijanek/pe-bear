@@ -40,6 +40,27 @@ if(PEBEAR_BUILD_TESTS)
 	find_package(Qt${QT_VERSION_MAJOR} COMPONENTS Test REQUIRED)
 endif()
 
+# The updater needs Qt Network and the Qt5/Qt6 API. Qt4 and Windows XP are out
+# of scope: on such a build the option is forced off rather than half-supported.
+set(PEBEAR_UPDATER_ACTIVE OFF)
+if(PEBEAR_ENABLE_UPDATER)
+	if(USE_QT4 AND NOT PEBEAR_ENABLE_LEGACY_UPDATER)
+		message(STATUS "updater: disabled (Qt4 build, PEBEAR_ENABLE_LEGACY_UPDATER=OFF)")
+	else()
+		find_package(Qt${QT_VERSION_MAJOR} COMPONENTS Network REQUIRED)
+		if(PEBEAR_BUILD_UPDATER_TESTS)
+			find_package(Qt${QT_VERSION_MAJOR} COMPONENTS Test REQUIRED)
+		endif()
+		set(PEBEAR_UPDATER_ACTIVE ON)
+		# Must be a directory-level definition, not only a property of the
+		# pebear_update_core target: moc is invoked through qt_wrap_cpp below and
+		# only sees definitions added here. Without it, moc skips the updater
+		# slots and the menu action silently fails to connect at runtime.
+		add_definitions(-DPEBEAR_WITH_UPDATER=1)
+		message(STATUS "updater: enabled")
+	endif()
+endif()
+
 include_directories( ${PARSER_INC} )
 include_directories( ${SIGFIND_INC} )
 include_directories( ${DISASM_DIR} ${CAPSTONE_INC})
@@ -321,6 +342,10 @@ ENDIF()
 
 add_definitions(-DCOMMIT_HASH=${COMMIT_HASH})
 
+if(PEBEAR_UPDATER_ACTIVE)
+	add_subdirectory(updater)
+endif()
+
 IF (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
 	set(MACOSX TRUE)
 ENDIF()
@@ -347,6 +372,11 @@ if(USE_QT4)
 	target_link_libraries (${PROJECT_NAME} ${QT_QTGUI_LIBRARIES} ${QT_QTCORE_LIBRARIES})
 else()	
 	target_link_libraries (${PROJECT_NAME} Qt${QT_VERSION_MAJOR}::Core Qt${QT_VERSION_MAJOR}::Widgets)
+endif()
+
+if(PEBEAR_UPDATER_ACTIVE)
+	target_link_libraries (${PROJECT_NAME} pebear_update_core)
+	add_dependencies(${PROJECT_NAME} pebear_update_core)
 endif()
 
 if(PEBEAR_BUILD_TESTS)
