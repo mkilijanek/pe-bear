@@ -17,6 +17,8 @@ set(updater_tests
 	tst_downloadmanager
 	tst_updatemanager
 	tst_liverelease
+	tst_transactionjournal
+	tst_transaction
 )
 
 foreach(test_name ${updater_tests})
