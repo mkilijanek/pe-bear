@@ -41,7 +41,7 @@ pokryte natywnie, bez Windows.
 
 2026-10-04T22:01:16Z starting #19 (M2 part 2/3): secure package extraction - traversal, UNC, drive-qualified, links, duplicates, case collisions, ZIP bombs; natively testable over IFileSystem
 
-2026-10-05 #19 delivered (część 1 z 2 w tym kroku): ExtractionPolicy jako czysta funkcja listy
+2026-10-05 #19 delivered: ExtractionPolicy jako czysta funkcja listy
 wpisów - traversal, ścieżki absolutne/UNC/drive-qualified, linki, duplikaty, case collisions,
 bomby kompresji, zarezerwowane nazwy Windows, znaki kontrolne, limity rozmiaru i liczby wpisów.
 Decoder archiwum celowo poza zakresem: IArchiveReader jest interfejsem, a wybór konkretnej
@@ -54,3 +54,8 @@ Dwie rzeczy warte zapisania:
   wadliwe niezależnie od tego, gdzie test biegnie.
 - Test wyłapał błąd, zanim reguła spotkała prawdziwe archiwum: komponent "." wpadał w regułę
   "kończy się kropką", co odrzucałoby zwykłe pakiety tar (GNU tar zapisuje "./nazwa").
+
+PackageExtractor stosuje reguły i zapisuje kroki jako TransactionOp dla journala z #18. Cała
+lista wpisów jest oceniana przed zapisaniem czegokolwiek, więc archiwum złośliwe dopiero w
+ostatnim wpisie nie zostawia drzewa częściowego - stanu, którego kolejny krok nie odróżniłby od
+sukcesu.

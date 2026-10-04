@@ -20,6 +20,7 @@ set(updater_tests
 	tst_transactionjournal
 	tst_transaction
 	tst_extractionpolicy
+	tst_packageextractor
 )
 
 foreach(test_name ${updater_tests})
