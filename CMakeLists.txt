@@ -106,7 +106,11 @@ set(SIGFIND_LIB $<TARGET_FILE:sig_finder> CACHE PATH "SigFinder library path")
 
 option(PEBEAR_ENABLE_UPDATER "Build the built-in updater" ON )
 option(PEBEAR_ENABLE_LEGACY_UPDATER "Allow the updater on Qt4/Windows XP builds (unsupported)" OFF )
-option(PEBEAR_BUILD_UPDATER_TESTS "Build the updater unit tests" OFF )
+# Defaults to PEBEAR_BUILD_TESTS so that one flag turns on everything testable.
+# Kept as its own option for the case where only the updater suite is wanted.
+# Two independent flags were a trap: CI set PEBEAR_BUILD_TESTS alone and quietly
+# ran seven of ten test targets, with a green check either way.
+option(PEBEAR_BUILD_UPDATER_TESTS "Build the updater unit tests" ${PEBEAR_BUILD_TESTS})
 if(PEBEAR_BUILD_UPDATER_TESTS)
 	# must be called from the top level so that ctest finds the cases
 	enable_testing()
