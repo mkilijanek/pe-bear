@@ -22,20 +22,30 @@ concurrency:
 
 jobs:
   build:
-    name: ${{ matrix.qt }} / ${{ matrix.cc }}
-    runs-on: ubuntu-24.04
+    name: ${{ matrix.os }} / ${{ matrix.qt }} / ${{ matrix.cc }}
+    runs-on: ${{ matrix.os }}
+
+    # The forward-looking job must not be able to block a merge: a change in a
+    # future Ubuntu is information, not a reason to hold up unrelated work.
+    continue-on-error: ${{ matrix.experimental }}
 
     strategy:
       # One broken combination should not hide the state of the others.
       fail-fast: false
       matrix:
         include:
-          # Qt5 is what the published Linux packages are built against.
-          - { qt: Qt5, cc: gcc,   cxx: g++,     qt_pkg: qtbase5-dev,  qt_flag: -DUSE_QT5=ON }
+          # 24.04 ships Qt 5.15.13 and Qt 6.4.2 -- exactly the versions in the
+          # names of the published Linux assets, so this is the image that
+          # reproduces a release build most closely. Pinned rather than
+          # ubuntu-latest, which moves and would silently change what is tested.
+          - { os: ubuntu-24.04, qt: Qt5, cc: gcc,   cxx: g++,     qt_pkg: qtbase5-dev,  qt_flag: -DUSE_QT5=ON, experimental: false }
           # A second compiler catches the warnings and conformance issues GCC lets through.
-          - { qt: Qt5, cc: clang, cxx: clang++, qt_pkg: qtbase5-dev,  qt_flag: -DUSE_QT5=ON }
+          - { os: ubuntu-24.04, qt: Qt5, cc: clang, cxx: clang++, qt_pkg: qtbase5-dev,  qt_flag: -DUSE_QT5=ON, experimental: false }
           # Qt6 is the default when no USE_QT* flag is given, and is also published.
-          - { qt: Qt6, cc: gcc,   cxx: g++,     qt_pkg: qt6-base-dev, qt_flag: "" }
+          - { os: ubuntu-24.04, qt: Qt6, cc: gcc,   cxx: g++,     qt_pkg: qt6-base-dev, qt_flag: "",           experimental: false }
+          # Forward coverage: catches newer-GCC and newer-Qt6 breakage before
+          # 26.04 becomes the default. Advisory only -- see continue-on-error.
+          - { os: ubuntu-26.04, qt: Qt6, cc: gcc,   cxx: g++,     qt_pkg: qt6-base-dev, qt_flag: "",           experimental: true }
 
     steps:
       # submodules: recursive is not optional -- without it CMake fails at
