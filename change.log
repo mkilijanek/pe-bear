@@ -293,3 +293,5 @@ Przy okazji z pełnego buildu: pe-bear-updater.exe odmawia poprawnie pod Windows
 argumentów -> 10, --handoff C:\Windows\win.ini -> 10 z komunikatem o katalogu updatera),
 tst_libarchivereader WYKONAŁ się (nie pominięty), a tst_no_widgets_dependency jest pominięty,
 bo nie ma tam nm - stąd 28 celów wobec 29 na Linuksie.
+
+2026-10-05T13:02:47Z starting an optional Windows deployment step so a build can assemble a runnable PE-bear directory - needed because testing an update requires the layout the application runs from, not the one cmake --install produces

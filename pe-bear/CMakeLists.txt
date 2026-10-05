@@ -429,3 +429,8 @@ IF (NOT WIN32)
 		RENAME "${SCHEME_NAME}.metainfo.xml"
 	)
 endif()
+
+# A runnable directory for testing on Windows: the executables plus everything
+# they need beside them. Off unless PEBEAR_DEPLOY_DIR is set. Included last, so
+# both the application and the updater helper exist as targets by now.
+include("${CMAKE_SOURCE_DIR}/cmake/WindowsDeploy.cmake")
