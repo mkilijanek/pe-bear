@@ -27,6 +27,8 @@ set(updater_tests
 	tst_helperhandoff
 	tst_directoryinstaller
 	tst_updatehelper
+	tst_crossvolumeinstall
+	tst_processcontrol
 )
 
 foreach(test_name ${updater_tests})

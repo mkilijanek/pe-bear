@@ -148,6 +148,17 @@ qint64 RealProcessProbe::elapsedMs() const
 
 //----------------------------------------------------------------------
 
+int RealProcessLauncher::startBudgetMs(int totalMs)
+{
+	if (totalMs <= 0) return 0;
+	/* Launching is either quick or broken; it does not become more likely to
+	   succeed with another minute. A quarter of the budget, capped, leaves the
+	   bulk of it for the thing that genuinely can be slow -- a first start
+	   with an antivirus scanner reading every file that just appeared. */
+	const int cap = 10 * 1000;
+	return qMax(1, qMin(cap, totalMs / 4));
+}
+
 IProcessLauncher::Result RealProcessLauncher::runAndWait(const QString &exe,
 		const QStringList &args, const QString &workingDir, int timeoutMs)
 {
@@ -161,20 +172,36 @@ IProcessLauncher::Result RealProcessLauncher::runAndWait(const QString &exe,
 	process.setStandardOutputFile(QProcess::nullDevice());
 	process.setStandardErrorFile(QProcess::nullDevice());
 
+	/* One budget, split -- not one budget spent twice.
+	
+	   Both waits used to be given the whole of timeoutMs, so a process that
+	   was slow to start and then never finished could hold this for double
+	   the limit its caller documented. The handshake's 120 seconds became
+	   240. Starting is either quick or broken, so it gets a small fixed slice
+	   and the rest goes to waiting for the answer. */
+	const int startBudget = startBudgetMs(timeoutMs);
+
+	QElapsedTimer spent;
+	spent.start();
+
 	process.start(exe, args);
-	if (!process.waitForStarted(timeoutMs)) {
+	if (!process.waitForStarted(startBudget)) {
 		m_lastError = QLatin1String("could not start ") + QDir::toNativeSeparators(exe)
-			+ QLatin1String(": ") + process.errorString();
+			+ QLatin1String(" within ") + QString::number(startBudget)
+			+ QLatin1String(" ms: ") + process.errorString();
 		return result;
 	}
 	result.started = true;
 
-	if (!process.waitForFinished(timeoutMs)) {
+	/* Whatever is left of the budget, and never less than nothing. */
+	const int remaining = qMax(0, timeoutMs - static_cast<int>(spent.elapsed()));
+	if (!process.waitForFinished(remaining)) {
 		/* Left running on purpose. The caller's verdict is already decided by
 		   the absence of an answer, and killing a build that may be mid-write
 		   adds a failure mode without changing the outcome. */
-		m_lastError = QLatin1String("timed out after ") + QString::number(timeoutMs)
-			+ QLatin1String(" ms waiting for ") + QDir::toNativeSeparators(exe);
+		m_lastError = QLatin1String("timed out after ") + QString::number(spent.elapsed())
+			+ QLatin1String(" ms of a ") + QString::number(timeoutMs)
+			+ QLatin1String(" ms budget waiting for ") + QDir::toNativeSeparators(exe);
 		return result;
 	}
 

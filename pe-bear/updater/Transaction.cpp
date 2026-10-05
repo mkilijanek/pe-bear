@@ -208,13 +208,46 @@ bool Transaction::commit()
 	   a backup that is already gone. */
 	if (!setState(TxCommitted)) return false;
 
+	/* Both leftovers are reclaimed, and neither failure can fail the commit:
+	   the installation is already correct and in place, so the worst outcome
+	   here is wasted space. Problems are gathered and recorded rather than
+	   returned.
+	
+	   The staging tree matters as much as the backup. When activation moved
+	   the staged build into place there is little or nothing left, but when it
+	   fell back to copying -- which is what happens when staging and target
+	   are on different filesystems -- the whole uncompressed build stays
+	   behind. Without this, every successful cross-volume update left one, for
+	   good. */
+	QStringList problems;
+
 	if (!m_record.backupDir.isEmpty() && m_fs->exists(m_record.backupDir)) {
 		if (!m_fs->removeDirRecursively(m_record.backupDir)) {
-			/* Not a failure of the installation. Recorded and reported. */
-			m_record.error = QLatin1String("installed, but the backup could not be removed: ")
-				+ m_fs->lastError();
-			m_journal->write(m_record);
+			problems << (QLatin1String("the backup could not be removed: ") + m_fs->lastError());
 		}
+	}
+
+	if (!m_record.stagingDir.isEmpty() && m_fs->exists(m_record.stagingDir)) {
+		if (!m_fs->removeDirRecursively(m_record.stagingDir)) {
+			problems << (QLatin1String("the staging tree could not be removed: ")
+				+ m_fs->lastError());
+		}
+	}
+
+	/* And the staging root itself, but only when nothing is left in it. A
+	   sweep of whatever else is there would be a sweep of another run's work:
+	   two helpers can be mid-update at once, and only the journal knows which
+	   directories are still owed to someone. */
+	const QString stagingRoot = parentDirectoryOf(m_record.stagingDir);
+	if (!stagingRoot.isEmpty() && m_fs->isDir(stagingRoot)
+		&& m_fs->listDir(stagingRoot).isEmpty())
+	{
+		m_fs->removeDirRecursively(stagingRoot);
+	}
+
+	if (!problems.isEmpty()) {
+		m_record.error = QLatin1String("installed, but ") + problems.join(QLatin1String("; "));
+		m_journal->write(m_record);
 	}
 	return true;
 }

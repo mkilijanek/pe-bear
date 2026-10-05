@@ -1,4 +1,5 @@
 #include "StartupHandshake.h"
+#include "Random.h"
 
 using namespace pe_bear::updater;
 
@@ -20,17 +21,6 @@ namespace {
 		{ StartupHandshake::ReportedFailure, "ReportedFailure" }
 	};
 	const size_t VERDICT_COUNT = sizeof(VERDICTS) / sizeof(VERDICTS[0]);
-
-	QString newToken()
-	{
-		QString token;
-		token.reserve(TOKEN_HEX_CHARS);
-		while (token.length() < TOKEN_HEX_CHARS) {
-			token += QString::number(QRandomGenerator::global()->generate(), 16)
-				.rightJustified(8, QLatin1Char('0'));
-		}
-		return token.left(TOKEN_HEX_CHARS);
-	}
 
 }; // namespace
 
@@ -162,7 +152,7 @@ bool StartupHandshake::createRequest(const QString &requestPath, const QString &
 	}
 
 	Request r;
-	r.token = newToken();
+	r.token = randomHex(TOKEN_HEX_CHARS);
 	r.expectedVersion = expectedVersion.toString();
 	r.responsePath = responsePath;
 	if (!r.isValid()) return fail(QLatin1String("could not build the request"));

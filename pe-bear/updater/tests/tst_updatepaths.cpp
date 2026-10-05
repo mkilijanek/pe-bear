@@ -21,6 +21,7 @@ private slots:
 	void restrictsPermissionsToTheOwner();
 	void createsAFreshRandomDirectoryPerDownload();
 	void prefersStagingOnTheInstallationVolume();
+	void namingAStagingRootCreatesNothing();
 	void stagingSurvivesTheInstallationBeingMovedAside();
 	void fallsBackWhenTheInstallationIsNotWritable();
 	void defaultRootIsOutsideTheInstallation();
@@ -100,11 +101,41 @@ void TestUpdatePaths::prefersStagingOnTheInstallationVolume()
 
 	const QString staging = UpdatePaths::preferredStagingRoot(installDir, fallback.path());
 
-	QVERIFY(QDir(staging).exists());
 	/* Same volume: it shares the installation's parent. */
-	QCOMPARE(QFileInfo(staging).absolutePath(), QDir(parent.path()).absolutePath());
+	QCOMPARE(parentDirectoryOf(staging), QDir(parent.path()).absolutePath());
 	/* And not the fallback, which would mean a cross-volume copy. */
 	QVERIFY(!staging.startsWith(QDir(fallback.path()).absolutePath()));
+}
+
+void TestUpdatePaths::namingAStagingRootCreatesNothing()
+{
+	/* It used to create the directory, and that was the defect: this is called
+	   before the helper has validated anything -- and also when PE-bear merely
+	   starts -- so a stale, malformed or refused instruction left a
+	   .PE-bear-staging directory beside whatever path it named. It was the one
+	   filesystem change before the phase documented to change nothing, and it
+	   was outside the updater's own directory.
+	
+	   Creating it belongs to Installer, after canInstall has agreed the
+	   installation may be touched. */
+	QTemporaryDir parent;
+	const QString installDir = parent.path() + QLatin1String("/pe-bear");
+	QVERIFY(QDir().mkpath(installDir));
+	QTemporaryDir fallback;
+
+	const QStringList before = QDir(parent.path())
+		.entryList(QDir::AllEntries | QDir::Hidden | QDir::NoDotAndDotDot);
+
+	const QString staging = UpdatePaths::preferredStagingRoot(installDir, fallback.path());
+	QVERIFY(!staging.isEmpty());
+
+	QVERIFY2(!QDir(staging).exists(), "naming a staging root created it");
+	QCOMPARE(QDir(parent.path())
+		.entryList(QDir::AllEntries | QDir::Hidden | QDir::NoDotAndDotDot), before);
+
+	/* Asking twice is still free. */
+	QCOMPARE(UpdatePaths::preferredStagingRoot(installDir, fallback.path()), staging);
+	QVERIFY(!QDir(staging).exists());
 }
 
 void TestUpdatePaths::stagingSurvivesTheInstallationBeingMovedAside()
@@ -129,10 +160,14 @@ void TestUpdatePaths::stagingSurvivesTheInstallationBeingMovedAside()
 		qPrintable(QLatin1String("staging is inside the installation: ") + staging));
 	QVERIFY(staging != canonicalInstall);
 
-	/* Demonstrated rather than asserted about: move the installation and the
-	   staging directory is still there. */
+	/* Demonstrated rather than asserted about. The directory is created here
+	   because that is now the installer's job, not this function's -- and then
+	   the installation is moved aside exactly as the installer moves it. */
+	QVERIFY(QDir().mkpath(staging));
+	QVERIFY(QDir().mkpath(staging + QLatin1String("/tx-1")));
 	QVERIFY(QDir().rename(installDir, parent.path() + QLatin1String("/pe-bear.backup")));
-	QVERIFY2(QDir(staging).exists(), "the staged tree went with the installation");
+	QVERIFY2(QDir(staging + QLatin1String("/tx-1")).exists(),
+		"the staged tree went with the installation");
 }
 
 void TestUpdatePaths::fallsBackWhenTheInstallationIsNotWritable()
@@ -240,17 +275,6 @@ void TestUpdatePaths::parentDirectoryIsAPureStringOperation()
 	QFETCH(QString, parent);
 
 	QCOMPARE(parentDirectoryOf(path), parent);
-
-#if defined(Q_OS_WIN)
-	/* Windows keeps a leading "//" through cleanPath, so a UNC share's child
-	   has the share as its parent. POSIX normalises it to a single slash,
-	   which is correct there, so this cannot be a shared expectation. */
-	QCOMPARE(parentDirectoryOf(QString::fromLatin1("//srv/share/app")),
-		QString::fromLatin1("//srv/share"));
-#else
-	QCOMPARE(parentDirectoryOf(QString::fromLatin1("//srv/share/app")),
-		QString::fromLatin1("/srv/share"));
-#endif
 
 #if defined(Q_OS_WIN)
 	/* Windows keeps a leading "//" through cleanPath, so a UNC share's child

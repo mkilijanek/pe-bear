@@ -36,32 +36,33 @@ QString UpdatePaths::defaultRoot()
 
 QString UpdatePaths::preferredStagingRoot(const QString &installDir, const QString &fallbackRoot)
 {
+	/* Names a directory. Does not create one.
+	
+	   It used to create it, and that was a real defect: this runs before the
+	   helper has validated anything, so a stale, malformed or outright refused
+	   instruction left a .PE-bear-staging directory beside whatever path it
+	   happened to name -- the only filesystem change before the phase that is
+	   documented to change nothing, and outside the updater's private root at
+	   that. It is also called when PE-bear merely starts with the updater
+	   enabled, so simply running the application created it.
+	
+	   Creation now belongs to Installer, after canInstall has agreed the
+	   installation may be touched. That check already requires the parent to
+	   be writable -- replacing a directory by moving it is a write to its
+	   parent -- so the directory named here can be created when the time
+	   comes. */
 	if (!installDir.isEmpty()) {
 		QDir dir(installDir);
 		if (dir.exists()) {
-			/* Beside the installation, not inside it.
-			
-			   The point of staging here at all is to be on the same volume, so
-			   that activation is a rename rather than a copy of the whole
-			   build. Putting it *in* the installation directory achieves that
-			   and then destroys itself: the installer moves the installation
-			   aside before activating, and the staged tree goes with it. The
-			   move then fails with its source gone -- which is not a
-			   cross-volume problem and must not be treated as one.
-			
-			   The parent is the nearest place that is both on the same volume
-			   and survives the installation being moved. DirectoryInstaller
-			   already requires it to be writable, because replacing a
-			   directory by moving it is a write to its parent. */
+			/* Beside the installation, not inside it: the installer moves the
+			   installation aside before activating, and a staging tree within
+			   it would go along. The parent is the nearest place on the same
+			   volume that survives that move, which is what keeps activation a
+			   rename rather than a copy of the whole build. */
 			const QString parent = parentDirectoryOf(dir.absolutePath());
 			if (!parent.isEmpty() && parent != dir.absolutePath()) {
-				const QString candidate = QDir::cleanPath(
-					parent + QDir::separator() + QLatin1String(STAGING_DIR_NAME));
-				QDir candidateDir(candidate);
-				if (candidateDir.exists() || QDir().mkpath(candidate)) {
-					restrictToOwner(candidate);
-					return candidate;
-				}
+				return QDir::cleanPath(parent + QDir::separator()
+					+ QLatin1String(STAGING_DIR_NAME));
 			}
 		}
 	}
