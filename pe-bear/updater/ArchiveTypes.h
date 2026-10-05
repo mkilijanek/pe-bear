@@ -26,10 +26,11 @@ struct ArchiveEntry
 	};
 
 	ArchiveEntry()
-		: kind(KindFile), uncompressedSize(0), compressedSize(0) {}
+		: kind(KindFile), uncompressedSize(0), compressedSize(0), isExecutable(false) {}
 
 	ArchiveEntry(const QString &p, Kind k, qint64 uncompressed = 0, qint64 compressed = 0)
-		: path(p), kind(k), uncompressedSize(uncompressed), compressedSize(compressed) {}
+		: path(p), kind(k), uncompressedSize(uncompressed), compressedSize(compressed),
+		isExecutable(false) {}
 
 	/** The path exactly as stored in the archive, unmodified. */
 	QString path;
@@ -38,6 +39,19 @@ struct ArchiveEntry
 	qint64 compressedSize;
 	/** For a link, the target exactly as stored. */
 	QString linkTarget;
+
+	/**
+	 * Whether the archive marks this entry as executable.
+	 *
+	 * A single flag rather than the stored mode, deliberately. An archive's
+	 * mode is attacker-controlled, and applying it wholesale would carry
+	 * setuid and setgid bits straight out of a downloaded file -- which would
+	 * turn "the updater unpacks a package" into "the updater creates a setuid
+	 * binary". Only the execute bit is worth carrying, and it has to be
+	 * carried: a build whose binary arrives without it does not run, and the
+	 * handshake then rolls back a package that was perfectly good.
+	 */
+	bool isExecutable;
 };
 
 QString archiveEntryKindToString(ArchiveEntry::Kind k);

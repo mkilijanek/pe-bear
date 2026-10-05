@@ -24,6 +24,9 @@ set(updater_tests
 	tst_libarchivereader
 	tst_installer
 	tst_startuphandshake
+	tst_helperhandoff
+	tst_directoryinstaller
+	tst_updatehelper
 )
 
 foreach(test_name ${updater_tests})
@@ -54,9 +57,18 @@ endforeach()
 # into the application instead. This is an architectural boundary, so it is
 # checked rather than merely intended.
 if(UNIX)
+	# The helper binary is inspected too when it is built: it must never be
+	# able to show a dialog, and that cannot be inferred from the library
+	# being clean -- its own main.cpp could reach QtWidgets directly.
+	set(no_widgets_targets "$<TARGET_FILE:pebear_update_core>")
+	if(TARGET pe-bear-updater)
+		list(APPEND no_widgets_targets "$<TARGET_FILE:pe-bear-updater>")
+	endif()
+	string(REPLACE ";" "$<SEMICOLON>" no_widgets_files "${no_widgets_targets}")
+
 	add_test(NAME tst_no_widgets_dependency
 		COMMAND ${CMAKE_COMMAND}
-			-DLIB_FILE=$<TARGET_FILE:pebear_update_core>
+			-DFILES=${no_widgets_files}
 			-P ${CMAKE_CURRENT_SOURCE_DIR}/check_no_widgets.cmake
 	)
 endif()

@@ -27,7 +27,11 @@ set (update_core_srcs
 	PackageExtractor.cpp
 	LibArchiveReader.cpp
 	Installer.cpp
+	DirectoryInstaller.cpp
 	StartupHandshake.cpp
+	HelperHandoff.cpp
+	ProcessControl.cpp
+	UpdateHelper.cpp
 )
 
 set (update_core_hdrs
@@ -52,7 +56,11 @@ set (update_core_hdrs
 	LibArchiveReader.h
 	Installer.h
 	PlatformInstaller.h
+	DirectoryInstaller.h
 	StartupHandshake.h
+	HelperHandoff.h
+	ProcessControl.h
+	UpdateHelper.h
 )
 
 add_library(pebear_update_core STATIC ${update_core_srcs} ${update_core_hdrs})
@@ -136,6 +144,37 @@ endif()
 
 SOURCE_GROUP("Source Files\\updater" FILES ${update_core_srcs})
 SOURCE_GROUP("Header Files\\updater" FILES ${update_core_hdrs})
+
+# pe-bear-updater: the process that replaces the installation.
+#
+# A separate executable because on Windows a running program's image cannot be
+# renamed or deleted -- PE-bear cannot be the thing that replaces PE-bear. No
+# Widgets: it must run without a display and must never be able to put a dialog
+# in front of the user. Qt Network arrives with pebear_update_core rather than
+# being asked for here; the helper does no networking of its own.
+#
+# Built only when a decoder is available. Without libarchive it could start,
+# re-verify the package and then refuse at the point of unpacking it, which is
+# a worse thing to ship than not shipping it: a build that cannot install
+# updates should not place an installer next to the application.
+if(PEBEAR_LIBARCHIVE_FOUND)
+	if(MSVC)
+		# The application is a GUI subsystem binary; this is not. Inherited
+		# from the parent directory, so it has to be taken back off here, or
+		# the helper gets /ENTRY:mainCRTStartup and no console to report to.
+		string(REPLACE "/SUBSYSTEM:WINDOWS" "" CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS}")
+		string(REPLACE "/ENTRY:mainCRTStartup" "" CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS}")
+	endif()
+
+	add_executable(pe-bear-updater helper/main.cpp)
+	target_link_libraries(pe-bear-updater PRIVATE pebear_update_core)
+
+	install(TARGETS pe-bear-updater
+		RUNTIME DESTINATION bin
+		BUNDLE DESTINATION .
+		COMPONENT pe-bear-updater
+	)
+endif()
 
 if(PEBEAR_BUILD_UPDATER_TESTS)
 	add_subdirectory(tests)

@@ -144,6 +144,13 @@ bool LibArchiveReader::scan()
 		if (!link) link = archive_entry_hardlink(entry);
 		if (link) out.linkTarget = QString::fromUtf8(link);
 
+		/* Only whether anyone may execute it, never the mode itself. Carrying
+		   the mode across would carry setuid and setgid with it, out of a
+		   file that arrived over the network. archive_entry_perm returns a
+		   mode_t, which MSVC does not have, so the type comes from the call. */
+		const auto perm = archive_entry_perm(entry);
+		out.isExecutable = (perm & 0111) != 0;
+
 		m_entries.append(out);
 		archive_read_data_skip(a);
 	}

@@ -3,6 +3,24 @@
 
 using namespace pe_bear::updater;
 
+QString pe_bear::updater::parentDirectoryOf(const QString &path)
+{
+	/* Refused before cleanPath touches it: cleanPath normalises separators on
+	   Windows but not on POSIX, so letting a native path through is what made
+	   this answer differ by host. See the header. */
+	if (path.contains(QLatin1Char('\\'))) return QString();
+
+	const QString clean = QDir::cleanPath(path);
+	const int slash = clean.lastIndexOf(QLatin1Char('/'));
+
+	if (slash < 0) return QString();
+	/* Child of the POSIX root: the parent is the root, not the empty string. */
+	if (slash == 0) return QLatin1String("/");
+	/* "C:/x" -> "C:/", keeping the separator so the result stays absolute. */
+	if (slash == 2 && clean.at(1) == QLatin1Char(':')) return clean.left(3);
+	return clean.left(slash);
+}
+
 bool RealFileSystem::fail(const QString &what) const
 {
 	m_lastError = what;
@@ -172,6 +190,36 @@ QByteArray RealFileSystem::readFile(const QString &path) const
 	const QByteArray data = f.readAll();
 	f.close();
 	return data;
+}
+
+bool RealFileSystem::setStandardPermissions(const QString &path, bool executable)
+{
+	QFile file(path);
+	if (!file.exists()) {
+		m_lastError = QLatin1String("cannot set permissions on a missing file: ")
+			+ QDir::toNativeSeparators(path);
+		return false;
+	}
+
+	/* Assigned rather than added to, because the point is to undo writeFile's
+	   owner-only restriction, not to layer bits on top of it. Group and other
+	   get read only -- never write, which would make an installation anyone
+	   could tamper with. */
+	QFile::Permissions permissions = QFile::ReadOwner | QFile::WriteOwner
+		| QFile::ReadGroup | QFile::ReadOther;
+	if (executable) {
+		/* ExeUser is left out on purpose: it means "the current user" rather
+		   than a fixed bit, so mixing it in would make the resulting mode
+		   depend on who ran the updater. */
+		permissions |= QFile::ExeOwner | QFile::ExeGroup | QFile::ExeOther;
+	}
+
+	if (!file.setPermissions(permissions)) {
+		m_lastError = QLatin1String("could not set permissions on ")
+			+ QDir::toNativeSeparators(path);
+		return false;
+	}
+	return true;
 }
 
 bool RealFileSystem::restrictToOwner(const QString &path)

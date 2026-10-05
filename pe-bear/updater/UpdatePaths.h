@@ -19,6 +19,14 @@ class UpdatePaths
 public:
 	static const char* DIR_NAME;
 	static const char* STAGING_DIR_NAME;
+	/**
+	 * Folder shared by PE-bear and the helper.
+	 *
+	 * Fixed rather than taken from QCoreApplication::applicationName(),
+	 * because the two executables have different names and must still agree
+	 * on where the package and the instructions live.
+	 */
+	static const char* APPLICATION_DIR_NAME;
 
 	/** Per-user application data location, outside the installation. */
 	static QString defaultRoot();

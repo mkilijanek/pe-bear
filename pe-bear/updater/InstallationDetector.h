@@ -53,7 +53,16 @@ public:
 	/** Detects the running installation. */
 	static InstallationInfo detect();
 
-	/** Testable core: no process or environment state beyond @p env is read. */
+	/**
+	 * Decides the kind from @p appDirPath, @p appFilePath and @p env alone --
+	 * no process state is consulted, so every classification is reachable from
+	 * a test.
+	 *
+	 * The one exception, which matters to callers: `writable` is answered by
+	 * probing the real filesystem, so that field is not driven by @p env and
+	 * cannot be faked. A caller that needs writability decided through its own
+	 * filesystem abstraction has to set it itself.
+	 */
 	static InstallationInfo detectAt(const QString &appDirPath,
 		const QString &appFilePath, const QMap<QString, QString> &env);
 

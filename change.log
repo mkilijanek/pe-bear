@@ -113,3 +113,183 @@ Token jest tym, co czyni bezużyteczną odpowiedź z poprzedniej próby: bez nie
 "wszystko w porządku" zwalidowałby instalację, która nigdy nie wystartowała. Sprawdzone mutacją
 - usunięcie kontroli tokenu wywala dokładnie ten test, a potraktowanie brakującego pola
 "started" jako true wywala swój.
+
+2026-10-05T08:34:36Z starting the pe-bear-updater helper, the last piece of #20: a separate process that re-validates the package itself, waits for PE-bear to exit, installs, and commits only after the new build answers the startup handshake
+
+2026-10-05 pe-bear-updater dla #20: osobny proces, który faktycznie podmienia instalację.
+Istnieje z powodu jednego faktu o Windows - obrazu działającego pliku wykonywalnego nie da
+się zmienić nazwy ani usunąć - więc PE-bear nie może podmienić siebie, niezależnie od tego,
+jak ostrożnie by próbował. Reszta projektu wynika z bycia tym "czymś innym":
+
+- Nie wierzy, tylko sprawdza ponownie. SHA-256 jest przeliczane w tym procesie, z pliku
+  takiego, jaki jest teraz. PE-bear policzył skrót, gdy paczka przyszła - to było zdanie o
+  przeszłości, nie własność pliku. Ścieżki są kanonikalizowane tutaj z tego samego powodu.
+- Nigdy nie zmusza PE-beara do zamknięcia. Czeka ograniczony czas i odmawia, gdy czas minie.
+  Alternatywą jest zabicie procesu, który może trzymać niezapisaną pracę użytkownika - a tej
+  żaden updater nie ma prawa wyrzucić. W helperze celowo nie ma kodu zdolnego zakończyć inny
+  proces.
+- Nigdy nie podnosi uprawnień. Cel, do którego użytkownik nie ma prawa pisać, jest odmówiony
+  i zgłoszony, nie eskalowany.
+- Zatwierdza wyłącznie na dowód. Nowy build musi odpowiedzieć na handshake właściwym nonce i
+  właściwą wersją. Upływ czasu nie jest dowodem: build, który wstaje i pada sekundę później,
+  nie zwalidował niczego, a zatwierdzenie na timerze zniszczyłoby jedyną działającą kopię.
+
+Kolejność odmów jest tak samo istotna jak same odmowy. Wszystko, co można sprawdzić bez
+zmiany czegokolwiek, jest sprawdzane pierwsze - zła instrukcja, podmieniona paczka i cel,
+którego nie wolno tykać, kończą z instalacją dokładnie taką, jaka była. Kody wyjścia są
+wypisane jawnie, a nie wyprowadzone z kolejności enuma: PE-bear je odczytuje, więc wstawienie
+nowej wartości nie może przenumerować używanych.
+
+Instrukcja idzie plikiem, nie argumentami wiersza poleceń, i to nie z wygody: wiersz poleceń
+jest czytelny dla każdego użytkownika maszyny, więc przekazanie tak ścieżki paczki i
+oczekiwanego skrótu opublikowałoby oba. Plik powstaje owner-only w prywatnym katalogu
+updatera. Czym to NIE jest: granicą uprawnień. Helper działa jako ten, kto go uruchomił, i
+nigdy nie eskaluje, więc nie może nic, czego wywołujący nie zrobiłby ręcznie - dlatego nie ma
+sekretu w wierszu poleceń ani próby uwierzytelnienia wywołującego. To byłby teatr. Ciężar
+noszą sprawdzenia, które helper wykonuje sam, wobec systemu plików.
+
+DirectoryInstaller to jedyny konkretny PlatformInstaller: instalacja będąca jednym
+samowystarczalnym katalogiem, czyli każdy kształt, w jakim PE-bear jest naprawdę wydawany i
+którego updaterowi wolno dotknąć. Rozpakowuje przez PackageExtractor, znajduje katalog builda
+(rozpakowując co najwyżej jeden poziom opakowania i tylko gdy to jednoznaczne - zgadywanie
+instaluje nie to, co trzeba), i wstawia go na miejsce przeniesieniem. Gdy przeniesienie
+odmówi, kopiuje: staging trafia na wolumen instalacji tylko wtedy, gdy ten jest zapisywalny,
+a UpdatePaths ma fallback na prywatny katalog, który może być innym systemem plików. Bez tej
+ścieżki update tam po prostu nigdy by nie działał.
+
+Druga strona handshake'u wpięta w main.cpp PE-beara: --update-handshake odpowiada PO
+zbudowaniu QApplication i MainWindow, nie przed. To cały sens - dotarcie do tego miejsca
+znaczy, że biblioteki się rozwiązały, wtyczka platformy Qt wstała, ustawienia dały się
+odczytać i główne okno się skonstruowało. To są awarie, które zły update faktycznie produkuje.
+Okno nie jest pokazywane, pętla zdarzeń nie startuje. Opcja jest też usuwana z listy plików do
+otwarcia - PE-bear nie przyjmuje przełączników, więc pozostawiona poleciałaby do parsera PE
+jako ścieżka.
+
+Dwa własne błędy złapane przez testy, oba warte zapisania:
+- checkRequest odrzucał KAŻDĄ ujemną różnicę czasu poza dokładnie -1, więc tolerancja na
+  rozjazd zegara była martwym kodem. Przyczyną było przeciążenie sentinela: ageSeconds
+  zwracało -1 i dla "nieczytelnej daty", i dla "datowane sekundę w przyszłość". Rozdzielone
+  na hasUsableTimestamp() i ageSeconds().
+- checkTarget brał writable z InstallationDetector::detectAt(), który wbrew swojemu
+  komentarzowi sonduje prawdziwy system plików. Ta sama klasa wady, co UpdatePaths::prepare()
+  w #24, i w jedynym miejscu helpera, którego odpowiedź decyduje o przenoszeniu plików.
+  Writable idzie teraz przez IFileSystem; mylący komentarz w detectAt poprawiony.
+
+90 nowych przypadków w trzech zestawach; 29 z 29 celów przechodzi lokalnie. tst_updatehelper
+celowo nie jest testem jednostkowym - installer, transakcja, journal i extractor są prawdziwe,
+na atrapie systemu plików, bo tezą wartą sprawdzenia nie jest żaden z nich osobno, lecz to, co
+składają: że odmowa zostawia instalację bajt w bajt, a awaria po aktywacji przywraca poprzedni
+build. Atrapa nowego builda odpowiada na handshake czytając żądanie i pisząc odpowiedź, a nie
+dostając werdykt do wstrzyknięcia - inaczej test przechodziłby równie chętnie wobec handshake'u,
+który niczego nie porównuje. Cztery mutacje sprawdzone: zawsze-prawdziwe porównanie skrótu,
+dopuszczenie paczki spoza katalogu updatera, uznanie braku odpowiedzi za sukces i rozpakowywanie
+dowolnego pierwszego podkatalogu - każda złapana dokładnie przez zamierzony test.
+
+Czego tu nie ma i dlaczego: WindowsInstaller z ponawianiem przy ERROR_SHARING_VIOLATION.
+Blokady plików, antywirus i UAC to jedyna część, której nie mogę uczciwie napisać bez
+testowania na Windows, a to testowanie należy do właściciela repo.
+
+2026-10-05 uzupełnienie do helpera, po uruchomieniu go na prawdziwym systemie plików.
+Testy jednostkowe przechodziły wszystkie; e2e wyłapał trzy defekty, których żaden z nich nie
+mógł zobaczyć, bo każdy podaje UpdatePaths jawnie i żaden nie modelował uprawnień:
+
+- preferredStagingRoot umieszczał staging WEWNĄTRZ katalogu instalacji. Instalator przenosi
+  instalację na bok przed aktywacją, więc staging szedł razem z nią. Teraz obok - w katalogu
+  nadrzędnym, który jest na tym samym wolumenie (czyli aktywacja nadal jest rename) i
+  przeżywa przeniesienie instalacji. DirectoryInstaller i tak już wymaga, by rodzic był
+  zapisywalny, bo podmiana katalogu przez przeniesienie jest zapisem do rodzica.
+- copyTree "udawało się" na nieistniejącym źródle: tworzyło katalog docelowy, nie miało czego
+  iterować i raportowało pusty katalog jako nowy build. To jedyny kształt awarii, którego
+  późniejszy krok nie odróżni od gotowej instalacji - i dokładnie to się stało, gdy backup
+  zabrał staging. movePathOrCopy odróżnia teraz "ruch odmówiony" (wart fallbacku) od "źródła
+  nie ma" (nie wart i niemożliwy).
+- Rozpakowane pliki nie dostawały bitu wykonywalności, a dodatkowo writeFile ogranicza każdy
+  zapisany plik do właściciela - słusznie dla rekordu transakcji i dla nonce handshake'u,
+  błędnie dla zawartości paczki, która staje się instalacją. Pierwsze znaczy, że zainstalowany
+  build nie startuje i handshake wycofuje całkowicie dobrą paczkę; drugie, że update odbiera
+  pozostałym użytkownikom dostęp, który mieli do podmienianej instalacji. Dodane
+  IFileSystem::setStandardPermissions (0644, +0111 gdy archiwum tak mówi) i ArchiveEntry::
+  isExecutable. Z archiwum bierze się WYŁĄCZNIE to, czy wpis jest wykonywalny, nie jego mode:
+  przeniesienie mode przeniosłoby setuid i setgid z pliku, który przyszedł z sieci.
+
+Przy okazji: defaultRoot() nie może pochodzić z AppLocalDataLocation, bo ta lokacja wynika z
+QCoreApplication::applicationName(), a dwa pliki wykonywalne muszą zgodzić się na JEDEN
+katalog - PE-bear pisałby do .../PE-bear/, a helper do .../pe-bear-updater/, i helper
+odrzucałby każdy prawdziwy handoff jako "spoza katalogu updatera". Nazwa katalogu jest teraz
+ustalona w UpdatePaths, a wynik jest bajt w bajt taki, jak dawała AppLocalDataLocation dla
+aplikacji o nazwie PE-bear - nic się nie przenosi.
+
+Pełny przebieg e2e na NUC: prawdziwa paczka tar.xz zbudowana przez tar, prawdziwy
+LibArchiveReader, prawdziwy QProcess, prawdziwy PE-bear odpowiadający na handshake po
+zbudowaniu QApplication i MainWindow (offscreen). Wynik: EXIT=0, "the new build answered the
+startup check", zainstalowane 0755/0644, dziennik transakcji zapisany, backup odrzucony przy
+zatwierdzeniu. Wcześniejsze trzy przebiegi, każdy kończący się RolledBack, przywróciły
+poprzedni build z identycznym md5 i nietkniętym plikiem obok - czyli ścieżka wycofania też
+jest sprawdzona na prawdziwych plikach, nie tylko na atrapie.
+
+2026-10-05 drugie uzupełnienie do helpera, po zbudowaniu gałęzi pod MSVC na hoście
+testowym Windows. Rdzeń i testy budują się bez libarchive (sam plik wykonywalny jest
+bramkowany tą opcją, ale ProcessControl.cpp z windows.h, UpdateHelper.cpp, HelperHandoff.cpp
+i DirectoryInstaller.cpp są w rdzeniu - czyli dokładnie ten wrażliwy kod się kompiluje).
+Zero ostrzeżeń, 26 z 28 celów przeszło. Dwa padły i obie awarie miały jedną przyczynę:
+
+QFileInfo::absolutePath() rozwiązuje ścieżkę względem bieżącego katalogu ORAZ bieżącego
+dysku procesu, więc na Windows "/opt/pe-bear" daje rodzica "C:\opt". Instalator odmawiał
+celu, który na Linuksie właśnie przyjął - to samo wyrażenie, inna odpowiedź, rozstrzygnięta
+stanem otoczenia. W produkcji ścieżki są kanoniczne i absolutne, więc akurat by nie bolało,
+ale wyznaczanie katalogu nadrzędnego przez API mogące sięgnąć do stanu procesu jest złym
+narzędziem niezależnie od tego. Dodane parentDirectoryOf() - czysta operacja na łańcuchu,
+użyta w DirectoryInstaller, UpdateHelper (2 miejsca) i UpdatePaths.
+
+Przy pisaniu testów do tej funkcji wyszły dwie dalsze rzeczy tej samej natury, obie w moim
+własnym kodzie napisanym minutę wcześniej:
+- QDir::fromNativeSeparators jest no-opem na POSIX, więc "C:\Tools\pe-bear" dawało rodzica
+  na Windows i pustkę na Linuksie. Usunięte: funkcja wymaga separatorów '/', czyli tego, co
+  zwracają wszystkie API ścieżek Qt na każdej platformie. Ścieżka bez '/' nie ma rodzica -
+  wszędzie. Kontrakt jest teraz taki sam na obu hostach, a to był cały sens tej zmiany.
+- QDir::cleanPath zwija wiodące "//" na POSIX, a zachowuje na Windows. Asercja o UNC nie
+  może więc być wspólna - jest pod #if, z obiema poprawnymi odpowiedziami. Wcześniej
+  twierdziłem w tabeli danych semantykę Windows na Linuksie.
+
+Wniosek do zapamiętania: trzy defekty z prawdziwego systemu plików i trzy z MSVC, wszystkie
+przy 100% zielonych testach jednostkowych na Linuksie. Atrapa systemu plików sprawdza logikę
+decyzji; nie sprawdza, czy pytania zadawane systemowi znaczą to samo wszędzie.
+
+2026-10-05 trzecie uzupełnienie: tst_no_widgets_dependency obejmuje też sam plik wykonywalny
+helpera, nie tylko bibliotekę rdzenia. Powód: w opisie PR napisałem, że brak Widgets jest
+"wymuszony", a test sprawdzał wyłącznie pebear_update_core - helper mógłby sięgnąć do QtWidgets
+we własnym main.cpp bez żadnej zmiany w bibliotece.
+
+Pierwsza mutacja (QMessageBox w helperze) ujawniła coś lepszego, niż zakładałem: to się NIE
+LINKUJE, bo helper linkuje tylko pebear_update_core, czyli Core i Network. Granica jest więc
+wymuszona przez linker, mocniej niż jakikolwiek test - a mój nowy test przeszedł wtedy pusto,
+bo obejrzał stary, czysty plik. Dokładnie ta pułapka, której pilnuję.
+
+Wartość testu jest w drugim scenariuszu, i on jest realistyczny: ktoś widzi błąd linkowania i
+"naprawia" go, dopisując Qt::Widgets do target_link_libraries. Wtedy build przechodzi i tylko
+test to łapie - sprawdzone, komunikat nazywa plik i znalezione klasy. To jedyna rzecz, która
+w tym helperze absolutnie nie może istnieć: zdolność do wyświetlenia okienka, a tym bardziej
+pytania o uprawnienia administratora.
+
+2026-10-05 czwarte uzupełnienie, po pełnym buildzie MSVC z vcpkg na hoście testowym (543/543,
+pe-bear-updater.exe powstał pierwszy raz gdziekolwiek, libarchive 3.8.9 przez łańcuch vcpkg).
+tst_updatepaths padł tam na przypadku, który sam dopisałem godzinę wcześniej - i padł, bo moja
+dokumentacja funkcji była nieprawdziwa.
+
+parentDirectoryOf miało wymagać separatorów '/' i nie konwertować ścieżek natywnych. Usunięcie
+QDir::fromNativeSeparators nie wystarczyło: QDir::cleanPath TEŻ normalizuje separatory na
+Windows, a na POSIX nie. Więc "C:\Tools\pe-bear" dawało "C:/Tools" pod MSVC i "" pod gcc -
+dokładnie ta sama wada, którą ta funkcja miała usunąć, tylko o jedno API dalej. Dwa podejścia,
+dwa razy ten sam błąd klasy "założyłem, że API jest neutralne".
+
+Rozwiązanie: ścieżka zawierająca backslash jest ODRZUCANA wprost, na każdym hoście, przed
+cleanPath. Kontrakt jest wtedy jednolity i myli się w bezpieczną stronę - wołający pyta, czy
+wynik jest zapisywalnym katalogiem, pusty łańcuch nim nie jest, więc krok zostaje odmówiony, a
+nie wykonany na złym katalogu. W produkcji nie kosztuje nic: każda ścieżka docierająca do tej
+funkcji przeszła wcześniej przez IFileSystem::canonicalPath, które zwraca '/' także na Windows,
+więc backslash tutaj znaczy, że wejście nie przyszło stamtąd, skąd miało.
+
+Przy okazji z pełnego buildu: pe-bear-updater.exe odmawia poprawnie pod Windows (brak
+argumentów -> 10, --handoff C:\Windows\win.ini -> 10 z komunikatem o katalogu updatera),
+tst_libarchivereader WYKONAŁ się (nie pominięty), a tst_no_widgets_dependency jest pominięty,
+bo nie ma tam nm - stąd 28 celów wobec 29 na Linuksie.

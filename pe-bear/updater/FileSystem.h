@@ -19,6 +19,45 @@ namespace updater {
  * Deliberately narrow: an operation that is not here cannot be performed, so
  * the surface a test has to simulate stays small and complete.
  */
+/**
+ * The directory containing @p path, as a pure string operation.
+ *
+ * Deliberately not QFileInfo::absolutePath(), which resolves a path against
+ * the process's current directory *and current drive*. On Windows that turns
+ * "/opt/pe-bear" into "C:\\opt" -- so the answer depends on ambient state
+ * that has nothing to do with the question. Every path this code derives a
+ * parent from is already absolute and canonical, and the parent of such a path
+ * needs no filesystem and no process state to compute.
+ *
+ * Requires '/' separators, which is what every Qt path API -- and so
+ * IFileSystem::canonicalPath -- returns on every platform, Windows included.
+ * A path containing a backslash is **refused outright**, on every host, and
+ * the result is empty.
+ *
+ * That refusal is the only way to make this uniform, and it took two attempts
+ * to see why. QDir::fromNativeSeparators is a no-op on POSIX, so converting
+ * would give two answers. But QDir::cleanPath *also* normalises separators on
+ * Windows and not on POSIX, so merely declining to convert gives two answers
+ * as well -- "C:\\Tools\\pe-bear" yielded "C:/Tools" under MSVC and "" under
+ * gcc. Refusing is uniform, and it fails in the safe direction: the caller
+ * asks whether the result is a writable directory, an empty string is not, and
+ * the step is refused rather than applied to the wrong place.
+ *
+ * It costs nothing in practice. Every path reaching this function has already
+ * been through IFileSystem::canonicalPath, which returns '/' separators even
+ * on Windows, so a backslash here means the input never came from where it
+ * was supposed to.
+ *
+ * Returns an empty string whenever there is no parent to name.
+ *
+ * On Windows a UNC path reduced as far as "//server/share" yields "//server",
+ * which is not a directory. Stated rather than handled: the caller asks
+ * whether it is writable, it is not, and the step is refused -- the safe
+ * direction. (On POSIX "//server/share" is an ordinary path and normalises to
+ * "/server/share", which is also correct there.)
+ */
+QString parentDirectoryOf(const QString &path);
+
 class IFileSystem
 {
 public:
@@ -50,6 +89,22 @@ public:
 	virtual QByteArray readFile(const QString &path) const = 0;
 
 	/** Restricts a path to the owner. Best-effort; false where unsupported. */
+	/**
+	 * Gives @p path the permissions an installed file should have: readable by
+	 * everyone, writable by its owner, and executable by everyone when
+	 * @p executable.
+	 *
+	 * Needed because writeFile deliberately restricts what it writes to the
+	 * owner -- right for a transaction record or a handshake nonce, wrong for
+	 * the contents of a package that is about to become a shared
+	 * installation. Without this step an update silently takes away the access
+	 * other users had to the installation it replaced.
+	 *
+	 * Never sets setuid, setgid or the sticky bit; QFile::Permissions cannot
+	 * express them, which is exactly why this goes through Qt rather than
+	 * chmod.
+	 */
+	virtual bool setStandardPermissions(const QString &path, bool executable) = 0;
 	virtual bool restrictToOwner(const QString &path) = 0;
 
 	/** Last error text from the most recent failed call, for diagnostics. */
@@ -80,6 +135,7 @@ public:
 	virtual bool writeFile(const QString &path, const QByteArray &data);
 	virtual QByteArray readFile(const QString &path) const;
 
+	virtual bool setStandardPermissions(const QString &path, bool executable);
 	virtual bool restrictToOwner(const QString &path);
 
 	virtual QString lastError() const { return m_lastError; }

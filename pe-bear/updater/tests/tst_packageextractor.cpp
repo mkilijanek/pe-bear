@@ -29,6 +29,12 @@ namespace {
 		{
 			add(ArchiveEntry(path, ArchiveEntry::KindFile, body.size(), body.size()), body);
 		}
+		void addExecutable(const QString &path, const QByteArray &body)
+		{
+			ArchiveEntry e(path, ArchiveEntry::KindFile, body.size(), body.size());
+			e.isExecutable = true;
+			add(e, body);
+		}
 		void addDir(const QString &path) { add(ArchiveEntry(path, ArchiveEntry::KindDir)); }
 
 		/** Claim a size in the header that the body does not match. */
@@ -74,6 +80,9 @@ class TestPackageExtractor : public QObject
 	Q_OBJECT
 
 private slots:
+	void carriesTheExecuteBitAcrossExtraction();
+	void undoesWriteFilesOwnerRestrictionOnExtractedFiles();
+	void reportsAFailureToSetPermissions();
 	void extractsAPackageAndRecordsEveryStep();
 	void createsMissingParentDirectories();
 	void writesNothingWhenTheLastEntryIsRefused();
@@ -277,6 +286,63 @@ void TestPackageExtractor::anEmptyArchiveStillCreatesTheDestination()
 	QVERIFY(ex.extract(QLatin1String(PKG), QLatin1String(DEST)));
 	QVERIFY(fs.hasDir(QLatin1String(DEST)));
 	QCOMPARE(ex.ops().size(), 1);
+}
+
+void TestPackageExtractor::carriesTheExecuteBitAcrossExtraction()
+{
+	/* Without this the installed build does not run, and the startup
+	   handshake rolls back a package that was entirely good -- reported to the
+	   user as a broken release. Found by running the helper against a real
+	   filesystem; nothing with a fake one noticed, because permissions were
+	   not modelled at all. */
+	FakeFileSystem fs;
+	FakeArchiveReader reader;
+	reader.addExecutable(QLatin1String("PE-bear"), QByteArray("elf"));
+	reader.addFile(QLatin1String("readme.txt"), QByteArray("text"));
+
+	PackageExtractor extractor(&fs, &reader);
+	QVERIFY2(extractor.extract(QLatin1String(PKG), QLatin1String(DEST)),
+		qPrintable(extractor.lastError()));
+
+	QVERIFY(fs.isExecutable(QLatin1String(DEST) + QLatin1String("/PE-bear")));
+	/* And only where the archive said so: a package cannot make its text
+	   files executable by accident. */
+	QVERIFY(!fs.isExecutable(QLatin1String(DEST) + QLatin1String("/readme.txt")));
+}
+
+void TestPackageExtractor::undoesWriteFilesOwnerRestrictionOnExtractedFiles()
+{
+	/* writeFile restricts what it writes to its owner, which is right for a
+	   transaction record and wrong for a file about to become part of a shared
+	   installation: left alone it takes away the read access every other user
+	   had to the installation being replaced. */
+	FakeFileSystem fs;
+	FakeArchiveReader reader;
+	reader.addFile(QLatin1String("readme.txt"), QByteArray("text"));
+	reader.addExecutable(QLatin1String("PE-bear"), QByteArray("elf"));
+
+	PackageExtractor extractor(&fs, &reader);
+	QVERIFY(extractor.extract(QLatin1String(PKG), QLatin1String(DEST)));
+
+	QVERIFY(fs.isReadableByAll(QLatin1String(DEST) + QLatin1String("/readme.txt")));
+	QVERIFY(fs.isReadableByAll(QLatin1String(DEST) + QLatin1String("/PE-bear")));
+}
+
+void TestPackageExtractor::reportsAFailureToSetPermissions()
+{
+	/* Reported, not ignored. A file that landed but could not be made
+	   executable is a build that will not start, and discovering that at the
+	   handshake costs a pointless rollback. */
+	FakeFileSystem fs;
+	FakeArchiveReader reader;
+	reader.addExecutable(QLatin1String("PE-bear"), QByteArray("elf"));
+	fs.failAlways(QLatin1String("setStandardPermissions"));
+
+	PackageExtractor extractor(&fs, &reader);
+	QVERIFY(!extractor.extract(QLatin1String(PKG), QLatin1String(DEST)));
+	QVERIFY(extractor.lastError().contains(QLatin1String("permissions")));
+	/* The file is still recorded, so rollback removes it. */
+	QVERIFY(!extractor.ops().isEmpty());
 }
 
 QTEST_GUILESS_MAIN(TestPackageExtractor)
