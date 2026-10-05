@@ -247,9 +247,11 @@ UpdateHelper::Result UpdateHelper::checkTarget(const HelperHandoff &handoff, Ins
 	}
 
 	/* The target must not be inside the updater's own working area: the
-	   staging tree and the backups live there, and replacing one of those
-	   with a build would make the transaction's record describe something
-	   that no longer exists. */
+	   staging tree lives there, and replacing one of those with a build
+	   would make the transaction's record describe something that no
+	   longer exists. The backup is not stored here anymore -- it goes
+	   beside the target -- but it is still created by the transaction,
+	   so the boundary itself is unchanged. */
 	const QString root = m_fs->canonicalPath(m_paths.root());
 	if (!root.isEmpty()
 		&& (canonicalTarget == root || canonicalTarget.startsWith(root + QLatin1Char('/'))))

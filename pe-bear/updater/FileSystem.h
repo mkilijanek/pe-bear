@@ -78,6 +78,17 @@ public:
 	virtual bool removeFile(const QString &path) = 0;
 	virtual bool removeDirRecursively(const QString &path) = 0;
 	/**
+	 * Removes a directory, but only an empty one; fails on anything still
+	 * inside. The staging root is shared by concurrent runs, so it must be
+	 * reclaimed through this and never through removeDirRecursively: a
+	 * recursive sweep of the root is a sweep of another run's in-flight tree.
+	 *
+	 * Absent is success, like removeDirRecursively. "Not empty" is the one
+	 * failure that means the right thing happened instead: someone else is
+	 * still using the directory, and the caller leaves it alone.
+	 */
+	virtual bool removeEmptyDir(const QString &path) = 0;
+	/**
 	 * Moves a file or directory. Expected to be atomic within one volume; the
 	 * installer relies on that, which is why staging prefers the target volume.
 	 */
@@ -129,6 +140,7 @@ public:
 	virtual bool makeDir(const QString &path);
 	virtual bool removeFile(const QString &path);
 	virtual bool removeDirRecursively(const QString &path);
+	virtual bool removeEmptyDir(const QString &path);
 	virtual bool movePath(const QString &from, const QString &to);
 	virtual bool copyFile(const QString &from, const QString &to);
 

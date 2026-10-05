@@ -212,37 +212,37 @@ bool Transaction::commit()
 	   the installation is already correct and in place, so the worst outcome
 	   here is wasted space. Problems are gathered and recorded rather than
 	   returned.
-	
+
 	   The staging tree matters as much as the backup. When activation moved
 	   the staged build into place there is little or nothing left, but when it
 	   fell back to copying -- which is what happens when staging and target
 	   are on different filesystems -- the whole uncompressed build stays
 	   behind. Without this, every successful cross-volume update left one, for
-	   good. */
+	   good.
+
+	   No exists() guards: both removals treat an absent path as success, so
+	   a guard would only add a stat call and another thing for the fakes to
+	   model. The emptiness checks that matter are on the record fields. */
 	QStringList problems;
 
-	if (!m_record.backupDir.isEmpty() && m_fs->exists(m_record.backupDir)) {
-		if (!m_fs->removeDirRecursively(m_record.backupDir)) {
-			problems << (QLatin1String("the backup could not be removed: ") + m_fs->lastError());
-		}
+	if (!m_record.backupDir.isEmpty() && !m_fs->removeDirRecursively(m_record.backupDir)) {
+		problems << (QLatin1String("the backup could not be removed: ") + m_fs->lastError());
 	}
 
-	if (!m_record.stagingDir.isEmpty() && m_fs->exists(m_record.stagingDir)) {
-		if (!m_fs->removeDirRecursively(m_record.stagingDir)) {
-			problems << (QLatin1String("the staging tree could not be removed: ")
-				+ m_fs->lastError());
-		}
+	if (!m_record.stagingDir.isEmpty() && !m_fs->removeDirRecursively(m_record.stagingDir)) {
+		problems << (QLatin1String("the staging tree could not be removed: ")
+			+ m_fs->lastError());
 	}
 
-	/* And the staging root itself, but only when nothing is left in it. A
-	   sweep of whatever else is there would be a sweep of another run's work:
-	   two helpers can be mid-update at once, and only the journal knows which
-	   directories are still owed to someone. */
-	const QString stagingRoot = parentDirectoryOf(m_record.stagingDir);
-	if (!stagingRoot.isEmpty() && m_fs->isDir(stagingRoot)
-		&& m_fs->listDir(stagingRoot).isEmpty())
-	{
-		m_fs->removeDirRecursively(stagingRoot);
+	/* And the staging root, but only when nothing is left in it. Never a
+	   recursive sweep: the root is shared, two helpers can be mid-update at
+	   once, and removeEmptyDir is the one call that cannot take another run's
+	   in-flight tree with it. A root that is not empty belongs to somebody
+	   else's run and is left alone -- recorded like any other leftover, so a
+	   person reading the journal can tell "shared" from "stuck". */
+	if (!m_record.stagingRoot.isEmpty() && !m_fs->removeEmptyDir(m_record.stagingRoot)) {
+		problems << (QLatin1String("the staging root could not be removed: ")
+			+ m_fs->lastError());
 	}
 
 	if (!problems.isEmpty()) {
@@ -313,12 +313,25 @@ bool Transaction::rollBack(const QString &reason)
 		}
 	}
 
+	/* The staging root is reclaimed after the steps, best-effort. It is not one
+	   of them and cannot fail the rollback: by this point the installation is
+	   restored, and a root that will not go away is litter -- or another run's
+	   tree still inside it, which leaving alone is the whole point of removing
+	   it only when empty. Recorded as a note either way, so the journal never
+	   claims tidiness it did not achieve. */
+	QString notes;
+	if (!m_record.stagingRoot.isEmpty() && !m_fs->removeEmptyDir(m_record.stagingRoot)) {
+		notes = QLatin1String("the staging root could not be removed: ") + m_fs->lastError();
+	}
+
 	if (problems.isEmpty()) {
-		m_record.error = reason;
+		m_record.error = notes.isEmpty() ? reason
+			: (reason + QLatin1String(" | ") + notes);
 		return setState(TxRolledBack);
 	}
 	m_record.error = reason + QLatin1String(" | rollback incomplete: ")
 		+ problems.join(QLatin1String("; "));
+	if (!notes.isEmpty()) m_record.error += QLatin1String("; ") + notes;
 	setState(TxFailed);
 	return refuse(m_record.error);
 }

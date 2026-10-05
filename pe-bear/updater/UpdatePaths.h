@@ -8,17 +8,32 @@ namespace updater {
 /**
  * Private working area of the updater.
  *
- * Downloads, staging, transaction records and backups are kept apart so that
- * no step can ever overwrite the inputs of another, and every run gets its own
+ * Downloads, staging and transaction records are kept apart so that no step
+ * can ever overwrite the inputs of another, and every run gets its own
  * randomly named subdirectory. Everything is created owner-only: a package
  * waiting to be installed must not be writable by anyone else between
  * verification and installation.
+ *
+ * Backups are the exception: they live beside the installation (see
+ * @p BACKUP_DIR_NAME), on its own volume, because moving the installation
+ * aside is a rename and a rename cannot cross a filesystem.
  */
 class UpdatePaths
 {
 public:
 	static const char* DIR_NAME;
 	static const char* STAGING_DIR_NAME;
+	/**
+	 * Prefix of the per-transaction backup directory, placed beside the
+	 * installation being replaced: "<install parent>/.PE-bear-backup-<txId>".
+	 *
+	 * Defined here and not spelled out in Installer because the name is a
+	 * convention shared by more than one place that reads the installation's
+	 * neighbourhood -- a person cleaning up a failed update by hand is one of
+	 * them -- and conventions that live only at their single point of use
+	 * cannot be discovered.
+	 */
+	static const char* BACKUP_DIR_NAME;
 	/**
 	 * Folder shared by PE-bear and the helper.
 	 *
@@ -51,7 +66,6 @@ public:
 	QString downloadsDir() const;
 	QString stagingDir() const;
 	QString transactionsDir() const;
-	QString backupsDir() const;
 	QString logFilePath() const;
 
 	/** Creates and returns a fresh, randomly named directory under downloads. */

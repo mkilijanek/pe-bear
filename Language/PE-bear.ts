@@ -3327,24 +3327,24 @@
 <context>
     <name>UpdateCoordinator</name>
     <message>
-        <location filename="../pe-bear/updater/gui/UpdateCoordinator.cpp" line="79"/>
+        <location filename="../pe-bear/updater/gui/UpdateCoordinator.cpp" line="84"/>
         <source>PE-bear will close and restart to finish the update.</source>
         <translation type="unfinished"></translation>
     </message>
     <message numerus="yes">
-        <location filename="../pe-bear/updater/gui/UpdateCoordinator.cpp" line="82"/>
+        <location filename="../pe-bear/updater/gui/UpdateCoordinator.cpp" line="87"/>
         <source>%n loaded file(s) have unsaved changes. They will be lost.</source>
         <translation type="unfinished">
             <numerusform></numerusform>
         </translation>
     </message>
     <message>
-        <location filename="../pe-bear/updater/gui/UpdateCoordinator.cpp" line="84"/>
+        <location filename="../pe-bear/updater/gui/UpdateCoordinator.cpp" line="89"/>
         <source>Continue?</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../pe-bear/updater/gui/UpdateCoordinator.cpp" line="87"/>
+        <location filename="../pe-bear/updater/gui/UpdateCoordinator.cpp" line="92"/>
         <source>Install the update</source>
         <translation type="unfinished"></translation>
     </message>

@@ -147,6 +147,19 @@ public:
 		return true;
 	}
 
+	virtual bool removeEmptyDir(const QString &path)
+	{
+		/* The whole point of this call is what it refuses to do, so the fake
+		   models that too: a directory with anything still inside is not
+		   removed. The real one gets the same behaviour from QDir::rmdir. */
+		if (shouldFail(QLatin1String("removeEmptyDir"), path)) return fail("removeEmptyDir refused");
+		const QString p = clean(path);
+		if (!m_dirs.contains(p)) return true;
+		if (!listDir(p).isEmpty()) return fail("removeEmptyDir: not empty");
+		m_dirs.remove(p);
+		return true;
+	}
+
 	virtual bool movePath(const QString &from, const QString &to)
 	{
 		/* One check for the whole operation. Calling shouldFail twice would

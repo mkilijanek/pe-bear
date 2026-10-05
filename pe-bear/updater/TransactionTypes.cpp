@@ -123,6 +123,9 @@ QByteArray TransactionRecord::toJson() const
 	root.insert(QLatin1String("state"), transactionStateToString(state));
 	root.insert(QLatin1String("targetDir"), targetDir);
 	root.insert(QLatin1String("stagingDir"), stagingDir);
+	/* Optional in the format: absent in records from builds that derived the
+	   root by naming convention instead, and those records stay readable. */
+	if (!stagingRoot.isEmpty()) root.insert(QLatin1String("stagingRoot"), stagingRoot);
 	root.insert(QLatin1String("backupDir"), backupDir);
 	root.insert(QLatin1String("packagePath"), packagePath);
 	root.insert(QLatin1String("packageSize"), double(packageSize));
@@ -170,6 +173,7 @@ TransactionRecord TransactionRecord::fromJson(const QByteArray &data, bool *ok)
 	rec.id            = root.value(QLatin1String("id")).toString();
 	rec.targetDir     = root.value(QLatin1String("targetDir")).toString();
 	rec.stagingDir    = root.value(QLatin1String("stagingDir")).toString();
+	rec.stagingRoot   = root.value(QLatin1String("stagingRoot")).toString();
 	rec.backupDir     = root.value(QLatin1String("backupDir")).toString();
 	rec.packagePath   = root.value(QLatin1String("packagePath")).toString();
 	rec.packageSize   = qint64(root.value(QLatin1String("packageSize")).toDouble(0));

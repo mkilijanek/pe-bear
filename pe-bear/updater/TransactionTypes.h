@@ -97,6 +97,12 @@ struct TransactionRecord
 	QString targetDir;
 	/** Where the new files were prepared. */
 	QString stagingDir;
+	/**
+	 * The directory the per-attempt staging tree lives in, created and
+	 * reclaimed by the transaction itself. Empty in records written before
+	 * the field existed: reclaiming is then skipped, exactly as before.
+	 */
+	QString stagingRoot;
 	/** Where the previous installation was moved. */
 	QString backupDir;
 

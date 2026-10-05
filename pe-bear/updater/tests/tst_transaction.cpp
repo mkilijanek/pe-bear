@@ -18,12 +18,14 @@ namespace {
 	const char* TARGET = "/opt/pe-bear";
 	const char* BACKUP = "/var/pe-bear-updates/backups/tx-1";
 	const char* TXDIR  = "/var/pe-bear-updates/transactions";
+	const char* STAGING_ROOT = "/var/pe-bear-updates/staging";
 
 	TransactionRecord seed()
 	{
 		TransactionRecord r;
 		r.targetDir = QLatin1String(TARGET);
-		r.stagingDir = QLatin1String("/var/pe-bear-updates/staging/tx-1");
+		r.stagingDir = QLatin1String(STAGING_ROOT) + QLatin1String("/tx-1");
+		r.stagingRoot = QLatin1String(STAGING_ROOT);
 		r.packagePath = QLatin1String("/var/pe-bear-updates/downloads/pkg.zip");
 		r.packageSize = 2048;
 		r.packageSha256 = QLatin1String(DIGEST);
@@ -80,6 +82,15 @@ private slots:
 	void rollBackKeepsGoingAfterAFailedStepAndReportsFailed();
 	void rollBackIsRefusedFromATerminalState_data();
 	void rollBackIsRefusedFromATerminalState();
+
+	/* --- the staging root's lifecycle --- */
+	void commitReclaimsAnEmptyStagingRoot();
+	void commitLeavesAnotherRunInTheRootAlone();
+	void commitRecordsARootThatCannotBeRemoved();
+	void rollBackReclaimsAnEmptyStagingRoot();
+	void rollBackLeavesAnotherRunInTheRootAlone();
+	void aRecordFromBeforeTheRootFieldSkipsReclaim();
+	void aRecordFromBeforeTheRootFieldRoundTrips();
 
 	/* --- recovery decisions, pure --- */
 	void planRecovery_data();
@@ -490,6 +501,181 @@ void TestTransaction::aFailedJournalWriteAbandonsTheTransition()
 	QVERIFY2(!tx.markActivated(activationOps()), "a transition survived a failed journal write");
 	QCOMPARE(tx.state(), TxBackedUp);
 	QCOMPARE(tx.record().ops.size(), 1);
+}
+
+void TestTransaction::commitReclaimsAnEmptyStagingRoot()
+{
+	/* The root is shared ground beside somebody's installation; an empty one
+	   left after every update is litter in a place the updater does not own.
+	   Reclaiming is the transaction's job now the record names it. */
+	FakeFileSystem fs;
+	installTarget(fs);
+	fs.addDir(QLatin1String(STAGING_ROOT));
+	fs.addDir(QLatin1String(STAGING_ROOT) + QLatin1String("/tx-1"));
+	TransactionJournal j(&fs, QLatin1String(TXDIR));
+	Transaction tx(&fs, &j);
+
+	QVERIFY(tx.begin(seed(), QLatin1String("tx-1")));
+	QVERIFY(tx.backup(QLatin1String(BACKUP)));
+	fs.addFile(QLatin1String("/opt/pe-bear/PE-bear"), QByteArray("new"));
+	QVERIFY(tx.markActivated(activationOps()));
+	QVERIFY(tx.markValidated());
+
+	QVERIFY2(tx.commit(), qPrintable(tx.lastError()));
+	QVERIFY2(!fs.hasDir(QLatin1String(STAGING_ROOT)), "an empty staging root outlived the commit");
+	/* and the reclaim was the careful kind: the two recursive removals are the
+	   backup and the staging tree, never the root itself */
+	QCOMPARE(fs.callCount(QLatin1String("removeEmptyDir")), 1);
+	QCOMPARE(fs.callCount(QLatin1String("removeDirRecursively")), 2);
+}
+
+void TestTransaction::commitLeavesAnotherRunInTheRootAlone()
+{
+	/* Two helpers can be mid-update at once. A commit must not take the other
+	   run's tree with it, which is why the root goes only when empty. */
+	FakeFileSystem fs;
+	installTarget(fs);
+	fs.addDir(QLatin1String(STAGING_ROOT));
+	fs.addDir(QLatin1String(STAGING_ROOT) + QLatin1String("/tx-1"));
+	fs.addFile(QLatin1String(STAGING_ROOT) + QLatin1String("/other-run/pkg.zip"),
+		QByteArray("in flight"));
+	TransactionJournal j(&fs, QLatin1String(TXDIR));
+	Transaction tx(&fs, &j);
+
+	QVERIFY(tx.begin(seed(), QLatin1String("tx-1")));
+	QVERIFY(tx.backup(QLatin1String(BACKUP)));
+	fs.addFile(QLatin1String("/opt/pe-bear/PE-bear"), QByteArray("new"));
+	QVERIFY(tx.markActivated(activationOps()));
+	QVERIFY(tx.markValidated());
+
+	QVERIFY2(tx.commit(), "a shared staging root failed the commit");
+	QCOMPARE(tx.state(), TxCommitted);
+	/* the other run's tree is untouched, and the leftover is recorded so a
+	   person reading the journal can tell "shared" from "stuck" */
+	QVERIFY(fs.hasFile(QLatin1String(STAGING_ROOT) + QLatin1String("/other-run/pkg.zip")));
+	QVERIFY2(tx.record().error.contains(QLatin1String("staging root")),
+		qPrintable(tx.record().error));
+}
+
+void TestTransaction::commitRecordsARootThatCannotBeRemoved()
+{
+	/* Same contract as a leftover backup: the installation is already correct,
+	   so the failure is a recorded problem, never a failed install. */
+	FakeFileSystem fs;
+	installTarget(fs);
+	fs.addDir(QLatin1String(STAGING_ROOT));
+	TransactionJournal j(&fs, QLatin1String(TXDIR));
+	Transaction tx(&fs, &j);
+
+	QVERIFY(tx.begin(seed(), QLatin1String("tx-1")));
+	QVERIFY(tx.backup(QLatin1String(BACKUP)));
+	fs.addFile(QLatin1String("/opt/pe-bear/PE-bear"), QByteArray("new"));
+	QVERIFY(tx.markActivated(activationOps()));
+	QVERIFY(tx.markValidated());
+
+	fs.failAlways(QLatin1String("removeEmptyDir"));
+	QVERIFY2(tx.commit(), "a stuck staging root was treated as a failed install");
+	QCOMPARE(tx.state(), TxCommitted);
+	QVERIFY2(tx.record().error.contains(QLatin1String("staging root")),
+		qPrintable(tx.record().error));
+}
+
+void TestTransaction::rollBackReclaimsAnEmptyStagingRoot()
+{
+	FakeFileSystem fs;
+	installTarget(fs);
+	fs.addDir(QLatin1String(STAGING_ROOT));
+	TransactionJournal j(&fs, QLatin1String(TXDIR));
+	Transaction tx(&fs, &j);
+
+	QVERIFY(tx.begin(seed(), QLatin1String("tx-1")));
+	QVERIFY(tx.backup(QLatin1String(BACKUP)));
+
+	QVERIFY2(tx.rollBack(QLatin1String("package rejected")), qPrintable(tx.lastError()));
+	QCOMPARE(tx.state(), TxRolledBack);
+	QVERIFY2(!fs.hasDir(QLatin1String(STAGING_ROOT)), "an empty staging root outlived the rollback");
+	/* the installation is whole, and a reclaimed root is not an error */
+	QVERIFY(fs.hasFile(QLatin1String("/opt/pe-bear/PE-bear")));
+	QVERIFY(!tx.record().error.contains(QLatin1String("staging root")));
+}
+
+void TestTransaction::rollBackLeavesAnotherRunInTheRootAlone()
+{
+	/* A root that will not go away is a note, not a problem: by this point the
+	   installation is restored, and refusing to report success over litter
+	   would tell the user to reinstall for no reason. */
+	FakeFileSystem fs;
+	installTarget(fs);
+	fs.addDir(QLatin1String(STAGING_ROOT));
+	fs.addFile(QLatin1String(STAGING_ROOT) + QLatin1String("/other-run/pkg.zip"),
+		QByteArray("in flight"));
+	TransactionJournal j(&fs, QLatin1String(TXDIR));
+	Transaction tx(&fs, &j);
+
+	QVERIFY(tx.begin(seed(), QLatin1String("tx-1")));
+	QVERIFY(tx.backup(QLatin1String(BACKUP)));
+
+	QVERIFY2(tx.rollBack(QLatin1String("package rejected")), qPrintable(tx.lastError()));
+	QCOMPARE(tx.state(), TxRolledBack);
+	QVERIFY(fs.hasFile(QLatin1String(STAGING_ROOT) + QLatin1String("/other-run/pkg.zip")));
+	QVERIFY2(tx.record().error.contains(QLatin1String("staging root could not be removed")),
+		qPrintable(tx.record().error));
+}
+
+void TestTransaction::aRecordFromBeforeTheRootFieldSkipsReclaim()
+{
+	/* Records written before the field existed have no stagingRoot, and their
+	   reclamation behaved like this already: nothing to name, nothing to
+	   remove. The old record must neither crash nor invent a root. */
+	FakeFileSystem fs;
+	installTarget(fs);
+	fs.addDir(QLatin1String(STAGING_ROOT));
+	TransactionJournal j(&fs, QLatin1String(TXDIR));
+
+	TransactionRecord old = seed();
+	old.stagingRoot.clear();
+	old.id = QLatin1String("tx-old");
+	old.state = TxBackedUp;
+	old.ops << TransactionOp(TransactionOp::OpMoved, QLatin1String(TARGET), QLatin1String(BACKUP));
+	QVERIFY(j.prepare());
+	QVERIFY(j.write(old));
+
+	Transaction tx(&fs, &j);
+	QVERIFY(tx.load(QLatin1String("tx-old")));
+	QVERIFY2(tx.rollBack(QLatin1String("recovered old-format record")), qPrintable(tx.lastError()));
+	QCOMPARE(tx.state(), TxRolledBack);
+	QCOMPARE(fs.callCount(QLatin1String("removeEmptyDir")), 0);
+	/* and the directory on disk was nobody's business to touch */
+	QVERIFY(fs.hasDir(QLatin1String(STAGING_ROOT)));
+}
+
+void TestTransaction::aRecordFromBeforeTheRootFieldRoundTrips()
+{
+	/* The field is optional in the format, in both directions: a new record
+	   carries it, an old one reads back without it, and neither direction
+	   changes the journal version. */
+	TransactionRecord r = seed();
+	r.id = QLatin1String("tx-1");
+	r.state = TxBackedUp;
+	bool ok = false;
+	const TransactionRecord back = TransactionRecord::fromJson(r.toJson(), &ok);
+	QVERIFY(ok);
+	QCOMPARE(back.stagingRoot, QString(QLatin1String(STAGING_ROOT)));
+
+	/* A record without the field parses to an empty one, not to garbage. The
+	   object is hand-stripped: like a journal from before the field, rather
+	   than one with the field removed after the fact. */
+	TransactionRecord old = seed();
+	old.id = QLatin1String("tx-old");
+	old.state = TxPrepared;
+	const QJsonDocument doc = QJsonDocument::fromJson(old.toJson());
+	QJsonObject obj = doc.object();
+	QVERIFY(obj.contains(QLatin1String("journalVersion")));
+	obj.remove(QLatin1String("stagingRoot"));
+	const TransactionRecord read = TransactionRecord::fromJson(
+		QJsonDocument(obj).toJson(), &ok);
+	QVERIFY(ok);
+	QVERIFY2(read.stagingRoot.isEmpty(), "an absent field was invented on read");
 }
 
 QTEST_GUILESS_MAIN(TestTransaction)
