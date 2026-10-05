@@ -254,3 +254,19 @@ własnym kodzie napisanym minutę wcześniej:
 Wniosek do zapamiętania: trzy defekty z prawdziwego systemu plików i trzy z MSVC, wszystkie
 przy 100% zielonych testach jednostkowych na Linuksie. Atrapa systemu plików sprawdza logikę
 decyzji; nie sprawdza, czy pytania zadawane systemowi znaczą to samo wszędzie.
+
+2026-10-05 trzecie uzupełnienie: tst_no_widgets_dependency obejmuje też sam plik wykonywalny
+helpera, nie tylko bibliotekę rdzenia. Powód: w opisie PR napisałem, że brak Widgets jest
+"wymuszony", a test sprawdzał wyłącznie pebear_update_core - helper mógłby sięgnąć do QtWidgets
+we własnym main.cpp bez żadnej zmiany w bibliotece.
+
+Pierwsza mutacja (QMessageBox w helperze) ujawniła coś lepszego, niż zakładałem: to się NIE
+LINKUJE, bo helper linkuje tylko pebear_update_core, czyli Core i Network. Granica jest więc
+wymuszona przez linker, mocniej niż jakikolwiek test - a mój nowy test przeszedł wtedy pusto,
+bo obejrzał stary, czysty plik. Dokładnie ta pułapka, której pilnuję.
+
+Wartość testu jest w drugim scenariuszu, i on jest realistyczny: ktoś widzi błąd linkowania i
+"naprawia" go, dopisując Qt::Widgets do target_link_libraries. Wtedy build przechodzi i tylko
+test to łapie - sprawdzone, komunikat nazywa plik i znalezione klasy. To jedyna rzecz, która
+w tym helperze absolutnie nie może istnieć: zdolność do wyświetlenia okienka, a tym bardziej
+pytania o uprawnienia administratora.
