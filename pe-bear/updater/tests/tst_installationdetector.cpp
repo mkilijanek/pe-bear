@@ -41,10 +41,15 @@ private slots:
 #ifdef Q_OS_LINUX
 	void systemDirectoriesAreRecognised_data();
 	void systemDirectoriesAreRecognised();
+#endif
+	/* Not inside the guard above: these inject the personal-folder list and
+	   take the root from QDir::rootPath(), so they mean the same on every
+	   platform. They were first declared inside it by accident -- the anchor
+	   chosen for the insertion sat in the Linux-only block -- which compiled
+	   and ran on Linux and was a C2039 "not a member" under MSVC. */
 	void aPersonalFolderItselfIsNeverUpdatable();
 	void aSubdirectoryOfAPersonalFolderIsFine();
 	void aFilesystemRootIsNeverUpdatable();
-#endif
 };
 
 void TestInstallationDetector::aWritableDirectoryIsPortableAndUpdatable()
