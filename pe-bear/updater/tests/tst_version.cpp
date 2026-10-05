@@ -37,14 +37,20 @@ void TestVersion::parsesAcceptedForms_data()
 	QTest::addColumn<int>("minor");
 	QTest::addColumn<int>("micro");
 	QTest::addColumn<int>("patch");
+	QTest::addColumn<int>("forkPatch");
 
-	QTest::newRow("tag with v") << "v0.7.2" << 0 << 7 << 2 << 0;
-	QTest::newRow("plain") << "0.7.2" << 0 << 7 << 2 << 0;
-	QTest::newRow("four components") << "0.7.0.4" << 0 << 7 << 0 << 4;
-	QTest::newRow("upper V") << "V1.2.3" << 1 << 2 << 3 << 0;
-	QTest::newRow("two components") << "1.2" << 1 << 2 << 0 << 0;
-	QTest::newRow("surrounding space") << "  v0.6.7.3 " << 0 << 6 << 7 << 3;
-	QTest::newRow("double digits") << "0.10.0" << 0 << 10 << 0 << 0;
+	QTest::newRow("tag with v") << "v0.7.2" << 0 << 7 << 2 << 0 << 0;
+	QTest::newRow("plain") << "0.7.2" << 0 << 7 << 2 << 0 << 0;
+	QTest::newRow("four components") << "0.7.0.4" << 0 << 7 << 0 << 4 << 0;
+	QTest::newRow("upper V") << "V1.2.3" << 1 << 2 << 3 << 0 << 0;
+	QTest::newRow("two components") << "1.2" << 1 << 2 << 0 << 0 << 0;
+	QTest::newRow("surrounding space") << "  v0.6.7.3 " << 0 << 6 << 7 << 3 << 0;
+	QTest::newRow("double digits") << "0.10.0" << 0 << 10 << 0 << 0 << 0;
+	QTest::newRow("fork patch") << "0.7.2-p001" << 0 << 7 << 2 << 0 << 1;
+	QTest::newRow("fork patch on a tag") << "v0.7.2-p002" << 0 << 7 << 2 << 0 << 2;
+	QTest::newRow("fork patch, unpadded") << "0.7.2-p12" << 0 << 7 << 2 << 0 << 12;
+	QTest::newRow("fork patch on four components") << "0.7.2.1-p003" << 0 << 7 << 2 << 1 << 3;
+	QTest::newRow("fork patch zero") << "0.7.2-p0" << 0 << 7 << 2 << 0 << 0;
 }
 
 void TestVersion::parsesAcceptedForms()
@@ -54,6 +60,7 @@ void TestVersion::parsesAcceptedForms()
 	QFETCH(int, minor);
 	QFETCH(int, micro);
 	QFETCH(int, patch);
+	QFETCH(int, forkPatch);
 
 	const Version v = Version::fromString(input);
 	QVERIFY2(v.isValid(), qPrintable(QString("rejected: ") + input));
@@ -61,6 +68,7 @@ void TestVersion::parsesAcceptedForms()
 	QCOMPARE(v.minor(), minor);
 	QCOMPARE(v.micro(), micro);
 	QCOMPARE(v.patch(), patch);
+	QCOMPARE(v.forkPatch(), forkPatch);
 }
 
 void TestVersion::rejectsPrereleaseAndMalformed_data()
@@ -81,6 +89,13 @@ void TestVersion::rejectsPrereleaseAndMalformed_data()
 	QTest::newRow("letters") << "zero.seven.two";
 	QTest::newRow("negative") << "1.-2.3";
 	QTest::newRow("hex") << "0x1.2.3";
+	QTest::newRow("fork marker without a number") << "0.7.2-p";
+	QTest::newRow("fork marker with letters") << "0.7.2-px1";
+	QTest::newRow("fork marker in upper case") << "0.7.2-P001";
+	QTest::newRow("fork patch followed by more") << "0.7.2-p001-rc1";
+	QTest::newRow("fork patch too long") << "0.7.2-p0000000001";
+	QTest::newRow("fork patch alone") << "-p001";
+	QTest::newRow("other dash suffix") << "0.7.2-1";
 }
 
 void TestVersion::rejectsPrereleaseAndMalformed()
@@ -99,6 +114,15 @@ void TestVersion::comparesNumericallyNotLexically()
 	QVERIFY(Version::fromString("1.0.0") > Version::fromString("0.99.99"));
 	QVERIFY(Version::fromString("0.9.0") < Version::fromString("0.10.0"));
 	QVERIFY(!(Version::fromString("0.7.2") > Version::fromString("0.7.2")));
+
+	/* The fork's patches sit between the release and whatever upstream does next. */
+	QVERIFY(Version::fromString("0.7.2-p001") > Version::fromString("0.7.2"));
+	QVERIFY(Version::fromString("0.7.2-p002") > Version::fromString("0.7.2-p001"));
+	QVERIFY(Version::fromString("0.7.2-p010") > Version::fromString("0.7.2-p009"));
+	QVERIFY(Version::fromString("0.7.2.1") > Version::fromString("0.7.2-p999"));
+	QVERIFY(Version::fromString("0.7.3") > Version::fromString("0.7.2-p999"));
+	QVERIFY(Version::fromString("0.7.2-p001") == Version::fromString("v0.7.2.0-p1"));
+	QVERIFY(Version::fromString("0.7.2-p0") == Version::fromString("0.7.2"));
 }
 
 void TestVersion::treatsMissingTrailingComponentsAsZero()
@@ -117,6 +141,11 @@ void TestVersion::rendersCanonicalString_data()
 	QTest::newRow("keeps fourth") << "0.7.0.4" << "0.7.0.4";
 	QTest::newRow("pads to three") << "1.2" << "1.2.0";
 	QTest::newRow("strips v") << "v0.7.2" << "0.7.2";
+	QTest::newRow("fork patch, three digits") << "0.7.2-p001" << "0.7.2-p001";
+	QTest::newRow("fork patch padded") << "v0.7.2-p7" << "0.7.2-p007";
+	QTest::newRow("fork patch beyond three digits") << "0.7.2-p1234" << "0.7.2-p1234";
+	QTest::newRow("fork patch keeps a fourth component") << "0.7.2.1-p002" << "0.7.2.1-p002";
+	QTest::newRow("fork patch zero is dropped") << "0.7.2-p0" << "0.7.2";
 }
 
 void TestVersion::rendersCanonicalString()
@@ -134,6 +163,10 @@ void TestVersion::currentMatchesTheVersionHeader()
 	QCOMPARE(Version::current().major(), fromHeader.major());
 	QCOMPARE(Version::current().minor(), fromHeader.minor());
 	QCOMPARE(Version::current().micro(), fromHeader.micro());
+	QCOMPARE(Version::current().patch(), fromHeader.patch());
+	QCOMPARE(Version::current().forkPatch(), fromHeader.forkPatch());
+	QCOMPARE(Version::current().forkPatch(), int(REBEAR_FORK_PATCH));
+	QCOMPARE(Version::current().toString(), QString::fromLatin1(REBEAR_VERSION_STR));
 }
 
 void TestVersion::rejectsAbsurdlyLongComponents()

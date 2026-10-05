@@ -133,7 +133,7 @@ of a file that arrived over the network.
 
 | Path | Role |
 |---|---|
-| `Version.*` | strict numeric release versions; the number itself lives only in `rebear_ver_short.h` |
+| `Version.*` | strict numeric release versions, plus the fork's `-pNNN`; the number itself lives only in `rebear_ver_short.h` |
 | `BuildProfile.*` | what this build is: platform, architecture, package type, Qt major, runtime |
 | `UpdateTypes.*` | states, errors and the release/asset/candidate structures |
 | `ReleaseClient.*` | the bounded GitHub API exchange, plus pure parsing |
@@ -175,6 +175,16 @@ is enforced by the `tst_no_widgets_dependency` test, not merely documented.
 | `PEBEAR_PACKAGE_TYPE` | *(empty)* | `windows-zip`, `linux-tar-xz`, `linux-appimage`, `macos-app-zip` |
 | `PEBEAR_BUILD_RUNTIME` | *(empty)* | toolchain tag, e.g. `vs17`; inferred from `_MSC_VER` when unset |
 | `PEBEAR_MIN_OS_VERSION` | *(empty)* | lowest OS version this build supports |
+| `PEBEAR_FORK_PATCH` | `0` | the fork's number on top of the release: `3` makes this build `0.7.2-p003` |
+
+The fork numbers its own builds on top of the upstream release: `0.7.2-p001`,
+`0.7.2-p002`, ... They sort after the release they are built on and before
+whatever upstream publishes next (`0.7.2 < 0.7.2-p001 < 0.7.2-p002 < 0.7.2.1 <
+0.7.3`), so a fork release tagged `v0.7.2-p002` is an update for a `-p001`
+build and the upstream `v0.7.3` is an update for both. Any other dash or plus
+suffix is still a prerelease to this code and is never offered. The number is
+one more field in `rebear_ver_short.h`, set from CMake; the About box and the
+window caption show it through the same macro.
 
 A build that does not declare `PEBEAR_PACKAGE_TYPE` cannot prove which package
 would replace it, so it degrades to notify-only. Release packaging must set it;

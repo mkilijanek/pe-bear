@@ -359,6 +359,23 @@ ENDIF()
 
 add_definitions(-DCOMMIT_HASH=${COMMIT_HASH})
 
+# The fork's builds are numbered on top of the upstream release: 0.7.2-p001,
+# 0.7.2-p002, ... (see rebear_ver_short.h). 0 keeps the plain upstream version.
+set(PEBEAR_FORK_PATCH "0" CACHE STRING "Fork patch number on top of the release (0.7.2-p<N>); 0 for none")
+if(NOT PEBEAR_FORK_PATCH MATCHES "^[0-9]+$")
+	message(FATAL_ERROR "PEBEAR_FORK_PATCH must be a non-negative integer, got '${PEBEAR_FORK_PATCH}'")
+endif()
+if(PEBEAR_FORK_PATCH GREATER 0)
+	set(_fork_desc "${PEBEAR_FORK_PATCH}")
+	string(LENGTH "${_fork_desc}" _fork_len)
+	while(_fork_len LESS 3)
+		set(_fork_desc "0${_fork_desc}")
+		string(LENGTH "${_fork_desc}" _fork_len)
+	endwhile()
+	add_compile_definitions(REBEAR_FORK_PATCH=${PEBEAR_FORK_PATCH} REBEAR_FORK_PATCH_DESC="p${_fork_desc}")
+	message(STATUS "version: fork patch p${_fork_desc}")
+endif()
+
 if(PEBEAR_UPDATER_ACTIVE)
 	add_subdirectory(updater)
 endif()
