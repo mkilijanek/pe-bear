@@ -101,7 +101,27 @@ bool PackageExtractor::extract(const QString &packagePath, const QString &destDi
 			return fail(QLatin1String("could not write ") + itr->path
 				+ QLatin1String(": ") + m_fs->lastError());
 		}
+		/* Recorded before the permission change, so a failure below still
+		   leaves the file undoable. */
 		m_ops.append(TransactionOp(TransactionOp::OpCreated, target));
+
+		/* Applied to every file, not just the executable ones.
+		
+		   Two things go wrong without it. The execute bit has to survive
+		   extraction or the installed build does not run at all, and the
+		   startup handshake then rolls back a package that was entirely good.
+		   And writeFile restricts what it writes to its owner, which is right
+		   for a transaction record but would otherwise be installed -- taking
+		   away the read access every other user had to the installation being
+		   replaced.
+		
+		   Only whether the entry is executable is taken from the archive; see
+		   ArchiveEntry::isExecutable for why its stored mode is not. */
+		if (!m_fs->setStandardPermissions(target, itr->isExecutable)) {
+			m_reader->close();
+			return fail(QLatin1String("could not set permissions on ") + itr->path
+				+ QLatin1String(": ") + m_fs->lastError());
+		}
 	}
 
 	m_reader->close();

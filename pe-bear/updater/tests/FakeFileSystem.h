@@ -64,6 +64,9 @@ public:
 
 	bool hasFile(const QString &path) const { return m_files.contains(clean(path)); }
 	bool hasDir(const QString &path) const { return m_dirs.contains(clean(path)); }
+	bool isExecutable(const QString &path) const { return m_executable.contains(clean(path)); }
+	/** True once setStandardPermissions has been applied to the path. */
+	bool isReadableByAll(const QString &path) const { return m_installable.contains(clean(path)); }
 	QByteArray contentOf(const QString &path) const { return m_files.value(clean(path)); }
 	int fileCount() const { return m_files.size(); }
 
@@ -204,6 +207,15 @@ public:
 		return m_files.value(p);
 	}
 
+	virtual bool setStandardPermissions(const QString &path, bool executable)
+	{
+		const QString p = clean(path);
+		if (shouldFail(QLatin1String("setStandardPermissions"), p)) return false;
+		if (!m_files.contains(p)) return fail("setStandardPermissions: no such file");
+		m_installable.insert(p);
+		if (executable) m_executable.insert(p); else m_executable.remove(p);
+		return true;
+	}
 	virtual bool restrictToOwner(const QString &) { return true; }
 
 	virtual QString lastError() const { return m_lastError; }
@@ -251,6 +263,8 @@ private:
 	QSet<QString> m_dirs;
 	QMap<QString, bool> m_writable;
 	bool m_writableDefault;
+	QSet<QString> m_executable;
+	QSet<QString> m_installable;
 
 	QSet<QString> m_failAlways;
 	QMap<QString, int> m_failNth;

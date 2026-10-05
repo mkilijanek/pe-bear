@@ -2,9 +2,12 @@
 
 Native update discovery for PE-bear, built on the GitHub Releases API.
 
-This directory contains milestone **M1** of the updater: everything up to a
-verified package sitting on disk. Performing the installation is M2 (Windows),
-M3 (Linux and macOS) and M4 (packaging, CI and the release manifest).
+This directory contains milestones **M1** (discovery, download, verification)
+and **M2** (the transactional installer and the helper process). Remaining:
+M3 -- platform coverage for Linux and macOS packaging shapes -- and M4, which
+wires `PEBEAR_PACKAGE_TYPE` and the `pe-bear-build.json` manifest into the
+published packages. Until M4 does that, a release build still degrades to
+notify-only, because it cannot prove which package would replace it.
 
 ## What it does today
 
@@ -19,11 +22,63 @@ M3 (Linux and macOS) and M4 (packaging, CI and the release manifest).
 4. Confirms the size and the SHA-256 published by the API, streaming the hash so
    the window stays responsive. A package that does not match is deleted.
 5. Stops at `ReadyToInstall` and offers the user the choice.
+6. On the user's explicit confirmation, writes an instruction file and starts
+   `pe-bear-updater`, which waits for PE-bear to close, replaces the
+   installation inside a transaction, and commits only after the new build
+   proves it starts.
+
+## How installing works
+
+PE-bear cannot replace PE-bear. On Windows a running executable's image cannot
+be renamed or deleted, so something that is not the application has to do it,
+from outside the directory being replaced. That is the whole reason
+`pe-bear-updater` exists as a separate program.
+
+```
+PE-bear                          pe-bear-updater
+-------                          ---------------
+verify package
+write handoff.json  ----------->  re-verify digest, canonicalise paths
+start helper                      check the target is updatable
+quit                              wait for PE-bear to exit (never kills it)
+                                  open a transaction
+                                  stage the package
+                                  check the staged tree is PE-bear
+                                  move the installation aside
+                                  activate
+     <-- --update-handshake ----   start the new build
+write response, exit  ---------->  read the response: right nonce? right
+                                   version? started?
+                                  yes -> commit, discard the backup
+                                  no  -> roll back, restore the previous build
+```
+
+Three properties of that exchange are the point of it:
+
+- **Elapsed time is not evidence.** A build that starts and crashes a second
+  later has validated nothing. The new build has to say something specific,
+  echoing a one-time nonce, and it says it only after `QApplication` and the
+  main window have been constructed -- so a missing Qt library, an unloadable
+  platform plugin or unreadable settings all show up as no answer, and no
+  answer rolls back.
+- **Nothing is checked twice in the same process.** The helper recomputes the
+  SHA-256 itself. PE-bear hashed the package when it arrived, which was a
+  statement about the past, not a property of the file.
+- **Staging and the layout check happen before the backup.** A package that
+  will not unpack, or unpacks into something that is not PE-bear, has to be
+  discovered while the working installation is still in place. A digest proves
+  the bytes; it does not prove they are the right program.
+
+Every filesystem step is recorded in a journal before the state advances, so an
+interruption leaves something that can be replayed backwards. The helper's exit
+code says what happened, and five of its nine outcomes guarantee the
+installation is exactly as it was.
 
 ## What it deliberately does not do
 
-- Install anything. `Install and Restart` is enabled only in `ReadyToInstall`
-  and currently reports that the installer is not part of this build.
+- Terminate PE-bear. The helper waits, bounded, and refuses when the wait runs
+  out. There is deliberately no code in it capable of ending another process:
+  the alternative discards unsaved work that belongs to the user.
 - Touch a managed installation. Anything under `/usr`, inside a Flatpak or Snap,
   or in a directory the user cannot write to is reported and left alone.
 - Elevate. No `sudo`, no `pkexec`, no UAC, and no package manager is ever run —
@@ -45,7 +100,23 @@ GitHub's metadata. A signed manifest is a v2 item.
 
 TLS errors are fatal and never ignored. Redirects are followed only to an
 explicit host allowlist. Every process boundary re-validates: the installer
-helper (M2) recomputes the digest itself rather than trusting this result.
+helper recomputes the digest itself rather than trusting this result.
+
+**`pe-bear-updater` is not a privilege boundary**, and nothing about it pretends
+to be one. It runs as whoever started it and never elevates, so it can do
+nothing its invoker could not do by hand. There is therefore no secret on its
+command line and no attempt to authenticate its caller; that would be theatre.
+The instruction file is owner-only and lives in the updater's private directory
+for a narrower reason: a command line is readable by every user on the machine,
+and the package path and expected digest should not be published that way. The
+checks that carry weight are the ones the helper performs itself against the
+filesystem -- the digest, the canonical paths, that the package is inside the
+updater's own directory, that the target is a real updatable installation, and
+that the instruction is not stale.
+
+Only *whether* an archive entry is executable is taken from the package, never
+its stored mode: carrying the mode across would carry setuid and setgid bits out
+of a file that arrived over the network.
 
 ## Layout
 
@@ -62,6 +133,20 @@ helper (M2) recomputes the digest itself rather than trusting this result.
 | `PackageVerifier.*` | size and SHA-256, synchronous and event-loop-friendly |
 | `UpdateSettings.*` | preferences, stored with the rest of the configuration |
 | `UpdateManager.*` | the state machine |
+| `FileSystem.*` | `IFileSystem` and the real implementation; every destructive step goes through it |
+| `TransactionTypes.*`, `TransactionJournal.*`, `Transaction.*` | the install transaction, its on-disk record, and reverse-order rollback |
+| `ArchiveTypes.*` | `IArchiveReader` and the entry description the policy judges |
+| `ExtractionPolicy.*` | every reason an archive entry is refused, as a pure function |
+| `PackageExtractor.*` | unpacking under the policy, nothing written until the whole list passes |
+| `LibArchiveReader.*` | libarchive with only zip, tar, xz and gzip enabled |
+| `PlatformInstaller.h` | the per-OS steps, and nothing else |
+| `DirectoryInstaller.*` | the one concrete installer: an installation that is a single directory |
+| `Installer.*` | the platform-independent ordering and failure handling |
+| `HelperHandoff.*` | the instruction file PE-bear writes and the helper refuses to trust |
+| `ProcessControl.*` | waiting for a process and starting one, behind interfaces |
+| `StartupHandshake.*` | how a new build proves it works |
+| `UpdateHelper.*` | the helper's orchestration: the order of the refusals |
+| `helper/main.cpp` | the `pe-bear-updater` executable |
 | `gui/` | dialog and application glue — the only part that uses QtWidgets |
 | `tests/` | the unit tests, including a checked-in real API payload |
 
@@ -75,6 +160,7 @@ is enforced by the `tst_no_widgets_dependency` test, not merely documented.
 | `PEBEAR_ENABLE_UPDATER` | `ON` | build the updater at all |
 | `PEBEAR_ENABLE_LEGACY_UPDATER` | `OFF` | allow it on Qt4 builds; unsupported |
 | `PEBEAR_BUILD_UPDATER_TESTS` | `OFF` | build and register the unit tests |
+| `PEBEAR_WITH_LIBARCHIVE` | `ON` | the zip/tar.xz reader, and with it `pe-bear-updater` |
 | `PEBEAR_PACKAGE_TYPE` | *(empty)* | `windows-zip`, `linux-tar-xz`, `linux-appimage`, `macos-app-zip` |
 | `PEBEAR_BUILD_RUNTIME` | *(empty)* | toolchain tag, e.g. `vs17`; inferred from `_MSC_VER` when unset |
 | `PEBEAR_MIN_OS_VERSION` | *(empty)* | lowest OS version this build supports |
@@ -83,6 +169,12 @@ A build that does not declare `PEBEAR_PACKAGE_TYPE` cannot prove which package
 would replace it, so it degrades to notify-only. Release packaging must set it;
 wiring that into the published packages, together with the `pe-bear-build.json`
 manifest, is M4.
+
+Without libarchive the build still succeeds, `pe-bear-updater` is not produced,
+and the updater degrades to notify-only in the same way — CMake says so at
+configure time rather than leaving it to be discovered at runtime. Install
+`libarchive-dev` (Linux), `brew install libarchive` (macOS) or
+`vcpkg install libarchive` (Windows).
 
 ## Settings
 

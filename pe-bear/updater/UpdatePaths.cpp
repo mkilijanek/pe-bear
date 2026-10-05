@@ -1,21 +1,37 @@
 #include "UpdatePaths.h"
+#include "FileSystem.h"
 
 using namespace pe_bear::updater;
 
 const char* UpdatePaths::DIR_NAME = "PE-bear-updates";
 const char* UpdatePaths::STAGING_DIR_NAME = ".PE-bear-staging";
+/* Matches what QCoreApplication::applicationName() is set to in PE-bear, so
+   the path is unchanged from the one AppLocalDataLocation used to give. */
+const char* UpdatePaths::APPLICATION_DIR_NAME = "PE-bear";
 
 QString UpdatePaths::defaultRoot()
 {
-#if QT_VERSION >= QT_VERSION_CHECK(5, 4, 0)
-	QString base = QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation);
-#else
-	QString base = QStandardPaths::writableLocation(QStandardPaths::DataLocation);
-#endif
+	/* Deliberately not AppLocalDataLocation.
+	
+	   That location is derived from QCoreApplication::applicationName(), and
+	   two different executables have to agree on this directory: PE-bear
+	   writes the package and the instructions into it, and pe-bear-updater
+	   reads them back and refuses anything outside it. Asking Qt for "this
+	   application's data directory" gives each of them its own -- PE-bear
+	   would use .../PE-bear/updates and the helper .../pe-bear-updater/updates
+	   -- and the helper would then refuse every real handoff for being in the
+	   wrong place.
+	
+	   The folder name is therefore fixed here rather than inherited from
+	   whichever binary happens to be asking. The result is byte-identical to
+	   what AppLocalDataLocation yields for an application named PE-bear with
+	   no organization set, on all three platforms, so nothing moves. */
+	QString base = QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation);
 	if (base.isEmpty()) {
 		base = QDir::tempPath();
 	}
-	return QDir::cleanPath(base + QDir::separator() + QLatin1String(DIR_NAME));
+	return QDir::cleanPath(base + QDir::separator() + QLatin1String(APPLICATION_DIR_NAME)
+		+ QDir::separator() + QLatin1String(DIR_NAME));
 }
 
 QString UpdatePaths::preferredStagingRoot(const QString &installDir, const QString &fallbackRoot)
@@ -23,13 +39,29 @@ QString UpdatePaths::preferredStagingRoot(const QString &installDir, const QStri
 	if (!installDir.isEmpty()) {
 		QDir dir(installDir);
 		if (dir.exists()) {
-			const QString candidate = QDir::cleanPath(
-				dir.absolutePath() + QDir::separator() + QLatin1String(STAGING_DIR_NAME));
-			/* only worth using if we can actually create it there */
-			QDir candidateDir(candidate);
-			if (candidateDir.exists() || QDir().mkpath(candidate)) {
-				restrictToOwner(candidate);
-				return candidate;
+			/* Beside the installation, not inside it.
+			
+			   The point of staging here at all is to be on the same volume, so
+			   that activation is a rename rather than a copy of the whole
+			   build. Putting it *in* the installation directory achieves that
+			   and then destroys itself: the installer moves the installation
+			   aside before activating, and the staged tree goes with it. The
+			   move then fails with its source gone -- which is not a
+			   cross-volume problem and must not be treated as one.
+			
+			   The parent is the nearest place that is both on the same volume
+			   and survives the installation being moved. DirectoryInstaller
+			   already requires it to be writable, because replacing a
+			   directory by moving it is a write to its parent. */
+			const QString parent = parentDirectoryOf(dir.absolutePath());
+			if (!parent.isEmpty() && parent != dir.absolutePath()) {
+				const QString candidate = QDir::cleanPath(
+					parent + QDir::separator() + QLatin1String(STAGING_DIR_NAME));
+				QDir candidateDir(candidate);
+				if (candidateDir.exists() || QDir().mkpath(candidate)) {
+					restrictToOwner(candidate);
+					return candidate;
+				}
 			}
 		}
 	}

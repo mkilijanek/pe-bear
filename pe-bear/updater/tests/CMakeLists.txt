@@ -24,6 +24,9 @@ set(updater_tests
 	tst_libarchivereader
 	tst_installer
 	tst_startuphandshake
+	tst_helperhandoff
+	tst_directoryinstaller
+	tst_updatehelper
 )
 
 foreach(test_name ${updater_tests})
