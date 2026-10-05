@@ -38,3 +38,24 @@ Decyzja projektowa z #5 zrealizowana: wszystkie operacje plikowe idą przez IFil
 FakeFileSystem w testach pozwala wstrzyknąć awarię w dowolnym kroku i w dowolnym wywołaniu,
 czego na prawdziwym systemie plików nie da się zrobić powtarzalnie. Dzięki temu całe #18 jest
 pokryte natywnie, bez Windows.
+
+2026-10-04T22:01:16Z starting #19 (M2 part 2/3): secure package extraction - traversal, UNC, drive-qualified, links, duplicates, case collisions, ZIP bombs; natively testable over IFileSystem
+
+2026-10-05 #19 delivered: ExtractionPolicy jako czysta funkcja listy
+wpisów - traversal, ścieżki absolutne/UNC/drive-qualified, linki, duplikaty, case collisions,
+bomby kompresji, zarezerwowane nazwy Windows, znaki kontrolne, limity rozmiaru i liczby wpisów.
+Decoder archiwum celowo poza zakresem: IArchiveReader jest interfejsem, a wybór konkretnej
+biblioteki zip/tar.xz to decyzja o łańcuchu dostaw dla narzędzia tej klasy i zasługuje na
+osobną zmianę.
+
+Dwie rzeczy warte zapisania:
+- Reguła case collisions jest sprawdzana na każdym hoście, nie tylko na Windows. Dwa wpisy
+  różniące się tylko wielkością liter rozpakowują się tam do jednego pliku, więc archiwum jest
+  wadliwe niezależnie od tego, gdzie test biegnie.
+- Test wyłapał błąd, zanim reguła spotkała prawdziwe archiwum: komponent "." wpadał w regułę
+  "kończy się kropką", co odrzucałoby zwykłe pakiety tar (GNU tar zapisuje "./nazwa").
+
+PackageExtractor stosuje reguły i zapisuje kroki jako TransactionOp dla journala z #18. Cała
+lista wpisów jest oceniana przed zapisaniem czegokolwiek, więc archiwum złośliwe dopiero w
+ostatnim wpisie nie zostawia drzewa częściowego - stanu, którego kolejny krok nie odróżniłby od
+sukcesu.

@@ -22,6 +22,9 @@ set (update_core_srcs
 	TransactionTypes.cpp
 	TransactionJournal.cpp
 	Transaction.cpp
+	ArchiveTypes.cpp
+	ExtractionPolicy.cpp
+	PackageExtractor.cpp
 )
 
 set (update_core_hdrs
@@ -40,6 +43,9 @@ set (update_core_hdrs
 	TransactionTypes.h
 	TransactionJournal.h
 	Transaction.h
+	ArchiveTypes.h
+	ExtractionPolicy.h
+	PackageExtractor.h
 )
 
 add_library(pebear_update_core STATIC ${update_core_srcs} ${update_core_hdrs})
