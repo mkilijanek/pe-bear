@@ -5,6 +5,7 @@ using namespace pe_bear::updater;
 
 const char* UpdatePaths::DIR_NAME = "PE-bear-updates";
 const char* UpdatePaths::STAGING_DIR_NAME = ".PE-bear-staging";
+const char* UpdatePaths::BACKUP_DIR_NAME = ".PE-bear-backup-";
 /* Matches what QCoreApplication::applicationName() is set to in PE-bear, so
    the path is unchanged from the one AppLocalDataLocation used to give. */
 const char* UpdatePaths::APPLICATION_DIR_NAME = "PE-bear";
@@ -121,11 +122,6 @@ QString UpdatePaths::transactionsDir() const
 	return QDir::cleanPath(m_root + QDir::separator() + QLatin1String("transactions"));
 }
 
-QString UpdatePaths::backupsDir() const
-{
-	return QDir::cleanPath(m_root + QDir::separator() + QLatin1String("backups"));
-}
-
 QString UpdatePaths::logFilePath() const
 {
 	return QDir::cleanPath(m_root + QDir::separator() + QLatin1String("updater.log"));
@@ -133,8 +129,10 @@ QString UpdatePaths::logFilePath() const
 
 bool UpdatePaths::prepare(QString *error)
 {
+	/* No backups directory: backups go beside the installation, and none of
+	   this class's own directories are involved in them. */
 	const QString dirs[] = {
-		m_root, downloadsDir(), stagingDir(), transactionsDir(), backupsDir()
+		m_root, downloadsDir(), stagingDir(), transactionsDir()
 	};
 	const int count = sizeof(dirs) / sizeof(dirs[0]);
 

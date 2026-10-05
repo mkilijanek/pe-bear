@@ -62,27 +62,20 @@ Installer::Outcome Installer::prepareAndActivate(const VerifiedUpdate &update)
 		return RefusedUntouched;
 	}
 
-	/* The first filesystem change of the whole run, and it happens only now --
-	   after canInstall has agreed the installation may be touched. Everything
-	   above this line is a decision; nothing above it writes.
-	
-	   Created through IFileSystem, not UpdatePaths::prepare(): that helper
-	   predates the interface and talks to QDir directly, so calling it here
-	   would route the installer around the very abstraction the design rests
-	   on -- and would be untestable without touching the real filesystem. */
+	/* Which directory staging will use is decided here, as a decision and
+	   nothing more: nothing is written to it yet, so a refusal above and below
+	   this point still leaves the disk untouched. The root itself is created
+	   only after the record exists -- see step 3. */
 	const QString stagingRoot = m_paths.stagingDir();
 	if (stagingRoot.isEmpty()) {
 		refuse(QLatin1String("the update directory layout is incomplete"));
 		return RefusedUntouched;
 	}
-	if (!m_fs->makeDir(stagingRoot)) {
-		refuse(QLatin1String("could not prepare ") + stagingRoot
-			+ QLatin1String(": ") + m_fs->lastError());
-		return RefusedUntouched;
-	}
-	m_fs->restrictToOwner(stagingRoot);
 
-	/* 2. A record exists before the first change. */
+	/* 2. A record exists before the first change, and it names the staging
+	      root. Every path from here on -- including a crash in the very next
+	      step, while the root is being created -- therefore ends in either an
+	      untouched disk or a record that says exactly what to undo. */
 	TransactionRecord seed;
 	seed.targetDir = m_targetDir;
 	seed.packagePath = update.packagePath;
@@ -93,6 +86,8 @@ Installer::Outcome Installer::prepareAndActivate(const VerifiedUpdate &update)
 
 	const QString txId = QUuid::createUuid().toString(QUuid::WithoutBraces);
 	const QString stagingDir = QDir::cleanPath(stagingRoot + QDir::separator() + txId);
+	seed.stagingDir = stagingDir;
+	seed.stagingRoot = stagingRoot;
 
 	/* The backup goes beside the installation, not into the updater's private
 	   directory under the user's data location.
@@ -113,15 +108,31 @@ Installer::Outcome Installer::prepareAndActivate(const VerifiedUpdate &update)
 		return RefusedUntouched;
 	}
 	const QString backupDir = QDir::cleanPath(targetParent + QDir::separator()
-		+ QLatin1String(".PE-bear-backup-") + txId);
-	seed.stagingDir = stagingDir;
+		+ QLatin1String(UpdatePaths::BACKUP_DIR_NAME) + txId);
 
 	if (!m_tx.begin(seed, txId)) {
 		refuse(m_tx.lastError());
 		return RefusedUntouched;
 	}
 
-	/* 3. Staged while the installation is still untouched, so a package that
+	/* 3. The first filesystem change of the whole run, and it happens only
+	      now -- after canInstall has agreed the installation may be touched,
+	      and after a record naming this directory is on disk. A root that will
+	      not create is rolled back like any other failure; the record is
+	      closed rather than orphaned, and the installation was never touched.
+
+	      Created through IFileSystem, not UpdatePaths::prepare(): that helper
+	      predates the interface and talks to QDir directly, so calling it here
+	      would route the installer around the very abstraction the design
+	      rests on -- and would be untestable without touching the real
+	      filesystem. */
+	if (!m_fs->makeDir(stagingRoot)) {
+		return abandon(QLatin1String("could not prepare the staging directory: ")
+			+ m_fs->lastError());
+	}
+	m_fs->restrictToOwner(stagingRoot);
+
+	/* 4. Staged while the installation is still untouched, so a package that
 	      will not unpack costs nothing. */
 	QList<TransactionOp> stagingOps;
 	if (!m_platform->prepareStaging(update, stagingDir, &stagingOps)) {
@@ -134,7 +145,7 @@ Installer::Outcome Installer::prepareAndActivate(const VerifiedUpdate &update)
 		return abandon(QLatin1String("could not record the staged files: ") + m_tx.lastError());
 	}
 
-	/* 4. Still before the swap. A digest proves the bytes, not that they are
+	/* 5. Still before the swap. A digest proves the bytes, not that they are
 	      the right program. */
 	QString layoutReason;
 	if (!m_platform->verifyStagedLayout(stagingDir, &layoutReason)) {
@@ -142,14 +153,14 @@ Installer::Outcome Installer::prepareAndActivate(const VerifiedUpdate &update)
 			+ layoutReason);
 	}
 
-	/* 5. The installation moves aside. From here a failure means a rollback
+	/* 6. The installation moves aside. From here a failure means a rollback
 	      that actually has to restore something. */
 	if (!m_tx.backup(backupDir)) {
 		return abandon(QLatin1String("could not move the installation aside: ")
 			+ m_tx.lastError());
 	}
 
-	/* 6. Activation. The steps go into the journal before the state advances,
+	/* 7. Activation. The steps go into the journal before the state advances,
 	      so an interruption leaves them undoable. */
 	QList<TransactionOp> activationOps;
 	if (!m_platform->activate(stagingDir, m_targetDir, &activationOps)) {

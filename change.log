@@ -400,3 +400,46 @@ weszły, a regeneracja na nieaktualnym .ts groziła wyrzuceniem tłumaczeń, kt�
 Objaw zniknie dopiero, gdy ktoś te napisy przetłumaczy - nie wymyślam tekstu interfejsu w
 językach, których nie potrafię sprawdzić. Pułapki -no-obsolete i CRLF opisane w
 Language/Readme.md.
+
+2026-10-05T15:20:00Z starting registering the #28 post-merge ultra-review findings on #27 because 14 verified findings (6 correctness, 2 reporting gaps, 6 cleanup/test hygiene) need a home in the tracker before the next fix batch
+
+2026-10-05 Second, deeper review of #28 registered on #27 (issuecomment-5996439776):
+14 verified findings. The one family worth naming: the staging root is born outside the
+transaction (makeDir before tx.begin, unjournaled), survives on every non-success path, and
+is still created by the GUI download path through UpdatePaths::prepare - so A2 fixed the
+helper and left the defect one user action later, and a refused run can now honestly claim
+"nothing was changed" with a fresh owner-only directory in Program Files to show for it.
+Also carried forward: the "Left running on purpose" comment in ProcessControl is false on
+POSIX (stack QProcess destructor kills the child, verified on Qt 5.15) - the timed-out
+child's actual fate on Windows must be measured during the B validation, because the
+rollback reasoning in Transaction.cpp:283 depends on it. New regression of note: A4's
+10 s start cap can roll back a good installation whose first start is AV-delayed - the very
+case the 120 s budget was generous for. False alarms cleared and recorded: the removed UNC
+test was an exact duplicate, the Random rework is safe (no test seeded global()).
+
+2026-10-05T15:55:00Z starting batch A2 of #27 (branch fix/updater-staging-root-lifecycle) because the staging root must live inside the transaction: journaled in the record, created after begin, reclaimed on every path, and never created by the GUI download flow
+
+2026-10-05 Batch A2 of #27 on fix/updater-staging-root-lifecycle: the staging root now lives
+inside the transaction. The record carries it (TransactionRecord::stagingRoot, optional in the
+JSON so old journals stay readable, journalVersion stays 1); Installer creates the root only
+after tx.begin(), so a journal that will not open leaves no root, and a root that will not
+create is rolled back like any other failure - the record is closed, never orphaned in
+Prepared. Reclamation is a new IFileSystem::removeEmptyDir (QDir::rmdir semantics): the root
+is shared by concurrent runs, so a recursive sweep of it would be a sweep of another run's
+in-flight tree. Commit reclaims it when empty and records it in problems otherwise ("shared"
+vs "stuck" is legible in the journal); rollback reclaims it best-effort, as a note in the
+error text, never flipping a restored installation to Failed. The GUI no longer wires the
+beside-install root at all (UpdateCoordinator uses default UpdatePaths), so the download flow
+cannot create it - the helper chooses the real root when an install is actually about to
+happen. Cleanup in the same batch: .PE-bear-backup- became UpdatePaths::BACKUP_DIR_NAME, the
+dead backupsDir() is gone (backups live beside the target, never in the private root), and
+the stale checkTarget comment about backups living in the root is fixed. Tests: new fake-FS
+cases for every reclaim path and both directions of the optional JSON field; tst_installer
+pins the record-before-root ordering (makeDir call 2 is the root, and failing it lands after
+the record) and the refused-journal-leaves-no-root property; tst_crossvolumeinstall now
+checks the file writes and commit failures it used to ignore. Tłumaczenia: tylko location
+w PE-bear.ts/_ja/_kr dla kontekstu UpdateCoordinator (79/82/84/87 -> 84/87/89/92) -
+ts-y ręcznie, per Language/Readme.md, wpisy pozostają unfinished zgodnie z decyzją. Full
+local suite: 24/24 green on Qt 5.15 (PEBEAR_BUILD_UPDATER_TESTS=ON). Partia B (helper w bin,
+rollback vs działający build, los dziecka po timeoucie, 10 s start cap) zostaje na #27 do
+weryfikacji na Windows.

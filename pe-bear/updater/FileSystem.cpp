@@ -114,6 +114,21 @@ bool RealFileSystem::removeDirRecursively(const QString &path)
 	return true;
 }
 
+bool RealFileSystem::removeEmptyDir(const QString &path)
+{
+	if (path.isEmpty()) return fail(QLatin1String("empty path"));
+	QDir dir(path);
+	/* QDir::rmdir is the one Qt call with the required semantics: it removes
+	   the directory itself, refuses when anything is still inside, and touches
+	   nothing else. It resolves no wildcards and recurses nowhere. */
+	if (!dir.exists()) return true;
+	if (!QDir().rmdir(path)) {
+		return fail(QLatin1String("could not remove ") + QDir::toNativeSeparators(path)
+			+ QLatin1String(": not empty or in use"));
+	}
+	return true;
+}
+
 bool RealFileSystem::movePath(const QString &from, const QString &to)
 {
 	if (from.isEmpty() || to.isEmpty()) return fail(QLatin1String("empty path"));

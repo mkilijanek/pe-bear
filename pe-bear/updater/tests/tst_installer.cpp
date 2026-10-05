@@ -152,6 +152,10 @@ private slots:
 	void aFailedActivationRestoresTheInstallation();
 	void anIncompleteRollbackIsReportedDistinctly();
 
+	void theRecordIsWrittenBeforeTheStagingRootExists();
+	void aRootThatCannotBeCreatedClosesTheRecord();
+	void aRefusedJournalLeavesNoStagingRoot();
+
 	void confirmValidatedCommitsAndDropsTheBackup();
 	void confirmValidatedRefusedBeforeActivation();
 	void rollBackAfterActivationRestoresTheOldBuild();
@@ -170,6 +174,10 @@ void TestInstaller::theHappyPathActivatesAndAwaitsValidation()
 	QCOMPARE(inst.prepareAndActivate(update()), Installer::AwaitingValidation);
 	QCOMPARE(inst.transaction().state(), TxActivated);
 	QCOMPARE(fs.contentOf(QLatin1String("/opt/pe-bear/PE-bear")), QByteArray("new-binary"));
+	/* the record carries the root, so any path that ends this run can
+	   reclaim it without re-deriving it by naming convention */
+	QCOMPARE(inst.transaction().record().stagingRoot,
+		QString(QLatin1String("/var/pe-bear-updates/staging")));
 }
 
 void TestInstaller::stepsRunInTheDocumentedOrder()
@@ -302,9 +310,10 @@ void TestInstaller::aFailedLayoutCheckLeavesTheInstallationIntact()
 
 	QCOMPARE(inst.prepareAndActivate(update()), Installer::FailedRolledBack);
 	QCOMPARE(fs.contentOf(QLatin1String("/opt/pe-bear/PE-bear")), QByteArray("old-binary"));
-	/* and the staging tree it created is gone too */
-	QVERIFY2(!fs.hasDir(QLatin1String("/var/pe-bear-updates/staging"))
-		|| fs.listDir(QLatin1String("/var/pe-bear-updates/staging")).isEmpty(),
+	/* and the staging tree it created is gone too, root and all: the root
+	   is reclaimed when empty, which after undoing the only staged tree it
+	   always is here */
+	QVERIFY2(!fs.hasDir(QLatin1String("/var/pe-bear-updates/staging")),
 		"the staged tree outlived the rollback");
 }
 
@@ -363,6 +372,10 @@ void TestInstaller::confirmValidatedCommitsAndDropsTheBackup()
 	const QString backup = inst.transaction().record().backupDir;
 	QVERIFY(!backup.isEmpty());
 	QVERIFY2(!fs.hasDir(backup), "the backup outlived the commit");
+	/* the staging root went too: it sits beside the installation, and an
+	   empty one is litter after a finished update */
+	QVERIFY2(!fs.hasDir(QLatin1String("/var/pe-bear-updates/staging")),
+		"an empty staging root outlived the commit");
 }
 
 void TestInstaller::confirmValidatedRefusedBeforeActivation()
@@ -406,6 +419,73 @@ void TestInstaller::installedExecutablePathPointsAtTheTarget()
 	QVERIFY(inst.installedExecutablePath().isEmpty()); /* nothing activated yet */
 	QCOMPARE(inst.prepareAndActivate(update()), Installer::AwaitingValidation);
 	QCOMPARE(inst.installedExecutablePath(), QString("/opt/pe-bear/PE-bear"));
+}
+
+void TestInstaller::theRecordIsWrittenBeforeTheStagingRootExists()
+{
+	/* The whole point of moving root creation after begin(): makeDir call 1
+	   is the journal's own directory, call 2 is the staging root, so failing
+	   the second lands after the record. Under the old order -- root first,
+	   journal second -- the very same failure left an unjournaled directory
+	   beside somebody's installation. */
+	FakeFileSystem fs;
+	installTarget(fs);
+	FakePlatform platform(&fs);
+	TransactionJournal journal(&fs, paths().transactionsDir());
+	Installer inst(&fs, &platform, &journal, paths());
+	inst.setInstallation(portableAt(QLatin1String(TARGET)));
+
+	fs.failOnCall(QLatin1String("makeDir"), 2);
+	QCOMPARE(inst.prepareAndActivate(update()), Installer::FailedRolledBack);
+	QCOMPARE(inst.transaction().state(), TxRolledBack);
+	/* the record exists and is closed, not orphaned in Prepared */
+	QCOMPARE(journal.listIds().size(), 1);
+	QVERIFY(fs.hasFile(paths().transactionsDir() + QLatin1Char('/')
+		+ journal.listIds().at(0) + QLatin1String(".json")));
+	/* and nothing was left beside the installation */
+	QVERIFY2(!fs.hasDir(QLatin1String("/var/pe-bear-updates/staging")),
+		"a staging root outlived a run that never staged anything");
+	QCOMPARE(fs.contentOf(QLatin1String("/opt/pe-bear/PE-bear")), QByteArray("old-binary"));
+}
+
+void TestInstaller::aRootThatCannotBeCreatedClosesTheRecord()
+{
+	/* The failure itself is the same one as above; what this pins is the
+	   outcome's honesty. "Refused, untouched" would claim no record exists,
+	   and one does. */
+	FakeFileSystem fs;
+	installTarget(fs);
+	FakePlatform platform(&fs);
+	TransactionJournal journal(&fs, paths().transactionsDir());
+	Installer inst(&fs, &platform, &journal, paths());
+	inst.setInstallation(portableAt(QLatin1String(TARGET)));
+
+	fs.failOnCall(QLatin1String("makeDir"), 2);
+	const Installer::Outcome outcome = inst.prepareAndActivate(update());
+	QVERIFY2(outcome != Installer::RefusedUntouched,
+		"a run that opened a journal claimed to have touched nothing");
+	QVERIFY(outcome != Installer::FailedNeedsAttention);
+	QVERIFY(!inst.lastError().isEmpty());
+}
+
+void TestInstaller::aRefusedJournalLeavesNoStagingRoot()
+{
+	/* The mirror of the first test: when the journal cannot be written there
+	   is no record, so there must not be a root either -- a directory that
+	   exists only while the record naming it does not is unowned. */
+	FakeFileSystem fs;
+	installTarget(fs);
+	FakePlatform platform(&fs);
+	TransactionJournal journal(&fs, paths().transactionsDir());
+	Installer inst(&fs, &platform, &journal, paths());
+	inst.setInstallation(portableAt(QLatin1String(TARGET)));
+
+	fs.failAlways(QLatin1String("writeFile"));
+	QCOMPARE(inst.prepareAndActivate(update()), Installer::RefusedUntouched);
+	QVERIFY(journal.listIds().isEmpty());
+	QVERIFY2(!fs.hasDir(QLatin1String("/var/pe-bear-updates/staging")),
+		"a refused journal still left a staging root behind");
+	QCOMPARE(fs.contentOf(QLatin1String("/opt/pe-bear/PE-bear")), QByteArray("old-binary"));
 }
 
 QTEST_GUILESS_MAIN(TestInstaller)

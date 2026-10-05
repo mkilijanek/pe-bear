@@ -17,8 +17,13 @@ UpdateCoordinator::UpdateCoordinator(UpdateSettings *settings,
 
 	const InstallationInfo installation = InstallationDetector::detect();
 	m_manager->setInstallation(installation);
-	m_manager->setPaths(UpdatePaths(UpdatePaths::defaultRoot(),
-		UpdatePaths::preferredStagingRoot(installation.installDir, UpdatePaths::defaultRoot())));
+	/* The default paths, deliberately. Wiring the beside-installation staging
+	   root here would mean UpdatePaths::prepare() creates it during a mere
+	   download -- before anything has been validated, and in the phase that is
+	   documented to change nothing outside the private root. The helper
+	   chooses the real staging root when an install is actually about to
+	   happen, and the installer creates it inside the transaction. */
+	m_manager->setPaths(UpdatePaths());
 
 	m_dialog = new UpdateDialog(m_manager, parentWindow);
 	connect(m_dialog, SIGNAL(installRequested()), this, SLOT(onInstallRequested()));

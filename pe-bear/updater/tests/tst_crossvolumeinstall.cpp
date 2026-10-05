@@ -164,14 +164,25 @@ Installer::Outcome TestCrossVolumeInstall::install(const QString &installRoot,
 		return Installer::RefusedUntouched;
 	}
 	/* The build that is about to be replaced, plus a neighbour that proves the
-	   whole directory moved rather than parts of it. */
+	   whole directory moved rather than parts of it. The opens are checked
+	   because these files are what the later assertions compare against: a
+	   silently absent file would make them pass against nothing. (Checked by
+	   hand rather than QVERIFY for the same reason the mkpath above is: this
+	   helper returns a value, and QVERIFY's failure path is a bare return.) */
 	QFile old(installDir + QLatin1Char('/') + exeName());
-	old.open(QIODevice::WriteOnly);
-	old.write("the old build");
-	old.close();
 	QFile tag(installDir + QLatin1String("/notes.tag"));
-	tag.open(QIODevice::WriteOnly);
-	tag.write("keep me");
+	if (!old.open(QIODevice::WriteOnly) || !tag.open(QIODevice::WriteOnly)) {
+		if (error) {
+			*error = QLatin1String("could not write the old build: ")
+				+ old.errorString() + QLatin1String(" / ") + tag.errorString();
+		}
+		return Installer::RefusedUntouched;
+	}
+	if (old.write("the old build") != 13 || tag.write("keep me") != 7) {
+		if (error) *error = QLatin1String("short write while arranging the old build");
+		return Installer::RefusedUntouched;
+	}
+	old.close();
 	tag.close();
 
 	FakeArchiveReader reader;
@@ -197,7 +208,12 @@ Installer::Outcome TestCrossVolumeInstall::install(const QString &installRoot,
 	if (error) *error = installer.lastError();
 
 	if (outcome == Installer::AwaitingValidation) {
-		installer.confirmValidated();
+		/* The commit itself is checked by the caller: swallowing its failure
+		   here would let every test below pass against an installation that
+		   was never finished. */
+		QString commitError;
+		if (!installer.confirmValidated()) commitError = installer.lastError();
+		if (error && !commitError.isEmpty()) *error = commitError;
 	}
 	return outcome;
 }
