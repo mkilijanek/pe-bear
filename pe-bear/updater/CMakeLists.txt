@@ -25,6 +25,7 @@ set (update_core_srcs
 	ArchiveTypes.cpp
 	ExtractionPolicy.cpp
 	PackageExtractor.cpp
+	LibArchiveReader.cpp
 )
 
 set (update_core_hdrs
@@ -46,6 +47,7 @@ set (update_core_hdrs
 	ArchiveTypes.h
 	ExtractionPolicy.h
 	PackageExtractor.h
+	LibArchiveReader.h
 )
 
 add_library(pebear_update_core STATIC ${update_core_srcs} ${update_core_hdrs})
@@ -60,6 +62,53 @@ target_link_libraries(pebear_update_core PUBLIC
 )
 
 target_compile_definitions(pebear_update_core PUBLIC PEBEAR_WITH_UPDATER=1)
+
+# libarchive decodes the published packages: ZIP for Windows and the macOS
+# bundle, TAR.XZ for Linux. Optional on purpose -- a build without it still
+# compiles and simply cannot install, which is the same notify-only
+# degradation as a build that cannot state its own package type. That keeps a
+# plain `cmake ..` from suddenly requiring a new system dependency.
+#
+# Found via PkgConfig where available (Linux, macOS via Homebrew) and via the
+# CMake package otherwise (vcpkg on Windows exports LibArchive::LibArchive).
+option(PEBEAR_WITH_LIBARCHIVE "Build the libarchive-backed archive reader" ON)
+if(PEBEAR_WITH_LIBARCHIVE)
+	set(PEBEAR_LIBARCHIVE_FOUND OFF)
+
+	find_package(LibArchive QUIET)
+	if(LibArchive_FOUND)
+		target_link_libraries(pebear_update_core PUBLIC ${LibArchive_LIBRARIES})
+		target_include_directories(pebear_update_core PUBLIC ${LibArchive_INCLUDE_DIRS})
+		set(PEBEAR_LIBARCHIVE_FOUND ON)
+		message(STATUS "libarchive: ${LibArchive_VERSION} (CMake package)")
+	else()
+		find_package(PkgConfig QUIET)
+		if(PkgConfig_FOUND)
+			pkg_check_modules(LIBARCHIVE QUIET libarchive)
+			if(LIBARCHIVE_FOUND)
+				target_link_libraries(pebear_update_core PUBLIC ${LIBARCHIVE_LIBRARIES})
+				target_include_directories(pebear_update_core PUBLIC ${LIBARCHIVE_INCLUDE_DIRS})
+				target_link_directories(pebear_update_core PUBLIC ${LIBARCHIVE_LIBRARY_DIRS})
+				set(PEBEAR_LIBARCHIVE_FOUND ON)
+				message(STATUS "libarchive: ${LIBARCHIVE_VERSION} (pkg-config)")
+			endif()
+		endif()
+	endif()
+
+	if(PEBEAR_LIBARCHIVE_FOUND)
+		target_compile_definitions(pebear_update_core PUBLIC PEBEAR_WITH_LIBARCHIVE=1)
+	else()
+		# Stated rather than silent: without it the updater can check and
+		# download but not install, and that should not be a surprise found
+		# later at runtime.
+		message(WARNING
+			"libarchive not found -- the updater will be able to check for and "
+			"download updates, but not install them. Install libarchive-dev "
+			"(Linux), `brew install libarchive` (macOS) or "
+			"`vcpkg install libarchive` (Windows), or set "
+			"PEBEAR_WITH_LIBARCHIVE=OFF to silence this.")
+	endif()
+endif()
 
 # Build-time description of this package. Empty values simply stay unknown;
 # the asset selector treats an unknown field as "cannot narrow the match".
