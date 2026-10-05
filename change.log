@@ -294,6 +294,7 @@ argumentów -> 10, --handoff C:\Windows\win.ini -> 10 z komunikatem o katalogu u
 tst_libarchivereader WYKONAŁ się (nie pominięty), a tst_no_widgets_dependency jest pominięty,
 bo nie ma tam nm - stąd 28 celów wobec 29 na Linuksie.
 
+2026-10-05T13:02:47Z starting an optional Windows deployment step so a build can assemble a runnable PE-bear directory - needed because testing an update requires the layout the application runs from, not the one cmake --install produces
 2026-10-05T12:00:00Z starting the #26 review follow-up: filing the tracker issue for the nine review findings (five POSIX-verifiable fixes now, two folded into the Windows validation pass) because the merge landed them on main
 
 2026-10-05T12:25:56Z starting batch A of the #27 review of #26: seven defects in code I wrote, all natively verifiable - cross-volume backup with no fallback, mkpath before validation, staging left after a copy activation, doubled handshake budget, silent log-write failure, a duplicated test block and a duplicated nonce generator
