@@ -42,6 +42,7 @@ void TestUpdatePaths::createsTheWholeTreeSeparately()
 	QVERIFY(QDir(paths.downloadsDir()).exists());
 	QVERIFY(QDir(paths.stagingDir()).exists());
 	QVERIFY(QDir(paths.transactionsDir()).exists());
+	QVERIFY(QDir(paths.helperDir()).exists());
 	/* No backups directory is created: backups go beside the installation,
 	   on its own volume, because moving it aside is a rename. */
 	QVERIFY(!QDir(QDir(paths.root()).absoluteFilePath("backups")).exists());
@@ -54,8 +55,8 @@ void TestUpdatePaths::subdirectoriesAreDistinct()
 
 	QSet<QString> all;
 	all << paths.downloadsDir() << paths.stagingDir()
-		<< paths.transactionsDir() << paths.logFilePath();
-	QCOMPARE(all.size(), 4);
+		<< paths.transactionsDir() << paths.logFilePath() << paths.helperDir();
+	QCOMPARE(all.size(), 5);
 }
 
 void TestUpdatePaths::restrictsPermissionsToTheOwner()

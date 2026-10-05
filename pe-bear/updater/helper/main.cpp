@@ -26,6 +26,7 @@
 #include "../ProcessControl.h"
 #include "../Version.h"
 #include "../HelperResult.h"
+#include "../HelperRelocation.h"
 
 #ifdef PEBEAR_WITH_LIBARCHIVE
 	#include "../LibArchiveReader.h"
@@ -45,6 +46,12 @@ namespace {
 		"                    the package, the target and the instructions are all\n"
 		"                    re-checked here and anything unexpected is refused.\n"
 		"  --version         print the version and exit\n"
+		"\n"
+		"Started from inside the installation it is about to replace, the helper\n"
+		"first copies itself out of it and continues from the copy (see #38).\n"
+		"  --relocated       the copy: never relocates again\n"
+		"  --relocated-from <pid>\n"
+		"                    the copy waits, briefly, for this original to exit\n"
 		"  --help            print this and exit\n";
 
 	void say(const QString &line)
@@ -100,6 +107,8 @@ int main(int argc, char *argv[])
 	app.setApplicationVersion(Version::current().toString());
 
 	QString handoffPath;
+	bool relocated = false;
+	qint64 relocatedFromPid = 0;
 	const QStringList args = QCoreApplication::arguments();
 	for (int i = 1; i < args.size(); i++) {
 		const QString &arg = args.at(i);
@@ -117,6 +126,20 @@ int main(int argc, char *argv[])
 				return UpdateHelper::resultToExitCode(UpdateHelper::RefusedInvalidRequest);
 			}
 			handoffPath = args.at(++i);
+			continue;
+		}
+		if (arg == QLatin1String(HelperRelocation::RELOCATED_FLAG)) {
+			relocated = true;
+			continue;
+		}
+		if (arg == QLatin1String(HelperRelocation::RELOCATED_FROM_FLAG)) {
+			bool ok = false;
+			if (i + 1 < args.size()) relocatedFromPid = args.at(i + 1).toLongLong(&ok);
+			if (!ok || relocatedFromPid <= 0) {
+				complain(QLatin1String("--relocated-from needs a pid"));
+				return UpdateHelper::resultToExitCode(UpdateHelper::RefusedInvalidRequest);
+			}
+			i++;
 			continue;
 		}
 		/* Refused rather than ignored. An unknown argument means the caller
@@ -173,6 +196,58 @@ int main(int argc, char *argv[])
 	DirectoryInstaller platform(&fs, readerPtr);
 	RealProcessProbe probe;
 	RealProcessLauncher launcher;
+
+	/* Earlier copies of this program cannot remove themselves on Windows, so
+	   each run clears the ones before it. Before the relocation below, which
+	   creates the one directory this must keep. */
+	HelperRelocation::sweep(&fs, paths.helperDir(), handoff.runId);
+
+	if (!relocated) {
+		/* Running from inside the installation means sitting in the backup
+		   when it is deleted, which on Windows fails on this very executable
+		   (#38). So: copy out, start the copy, leave. Should that fail, the
+		   update still goes through in place; what is lost is only the
+		   tidiness of the backup's removal. */
+		QStringList modules;
+		const QStringList raw = HelperRelocation::loadedModules();
+		for (int i = 0; i < raw.size(); i++) {
+			const QString c = fs.canonicalPath(raw.at(i));
+			if (!c.isEmpty()) modules << c;
+		}
+		const HelperRelocation::Plan plan = HelperRelocation::plan(
+			fs.canonicalPath(QCoreApplication::applicationFilePath()), modules,
+			fs.canonicalPath(handoff.targetDir), paths.helperDir(), handoff.runId);
+		if (plan.needed) {
+			QStringList copyArgs;
+			copyArgs << QLatin1String("--handoff") << handoffCanonical
+				<< QLatin1String(HelperRelocation::RELOCATED_FLAG)
+				<< QLatin1String(HelperRelocation::RELOCATED_FROM_FLAG)
+				<< QString::number(QCoreApplication::applicationPid());
+			QString why;
+			if (HelperRelocation::carryOut(&fs, plan, &why)
+				&& launcher.startDetached(plan.destExe, copyArgs, plan.destDir))
+			{
+				say(QLatin1String("stepping out of the installation: continuing from ")
+					+ QDir::toNativeSeparators(plan.destDir)
+					+ QLatin1String(" (its log goes to the usual place)"));
+				return 0;
+			}
+			if (why.isEmpty()) why = launcher.lastError();
+			complain(QLatin1String("could not step out of the installation (") + why
+				+ QLatin1String("); continuing in place, which may leave the backup directory behind"));
+		}
+	} else if (relocatedFromPid > 0) {
+		/* The original exits right after starting this copy, but "right
+		   after" is not "before": wait for it, so that it is never still
+		   inside the directory when that directory is moved. Bounded, and
+		   not a refusal -- an original that lingers costs the backup's
+		   removal, not the update. */
+		const ProcessIdentity origin = probe.identify(relocatedFromPid);
+		const qint64 deadline = probe.elapsedMs() + 5000;
+		while (origin.isValid() && probe.isRunning(origin) && probe.elapsedMs() < deadline) {
+			probe.sleep(50);
+		}
+	}
 
 	UpdateHelper helper(&fs, &platform, &probe, &launcher, paths);
 	const UpdateHelper::Result result = helper.run(handoff);

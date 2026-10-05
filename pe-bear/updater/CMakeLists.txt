@@ -34,6 +34,7 @@ set (update_core_srcs
 	UpdateHelper.cpp
 	Recovery.cpp
 	HelperResult.cpp
+	HelperRelocation.cpp
 	Random.cpp
 )
 
@@ -66,6 +67,7 @@ set (update_core_hdrs
 	UpdateHelper.h
 	Recovery.h
 	HelperResult.h
+	HelperRelocation.h
 	Random.h
 )
 
@@ -81,6 +83,12 @@ target_link_libraries(pebear_update_core PUBLIC
 )
 
 target_compile_definitions(pebear_update_core PUBLIC PEBEAR_WITH_UPDATER=1)
+
+if(WIN32)
+	# EnumProcessModules, for the helper to learn which DLLs it must carry
+	# out of the installation before replacing it (HelperRelocation).
+	target_link_libraries(pebear_update_core PUBLIC psapi)
+endif()
 
 # libarchive decodes the published packages: ZIP for Windows and the macOS
 # bundle, TAR.XZ for Linux. Optional on purpose -- a build without it still

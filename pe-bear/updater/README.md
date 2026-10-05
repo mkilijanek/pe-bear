@@ -27,7 +27,12 @@ notify-only, because it cannot prove which package would replace it.
 6. On the user's explicit confirmation -- asked every time, with a count of
    unsaved changes that would be lost -- writes an owner-only instruction file
    into its private directory and starts `pe-bear-updater` detached, then
-   closes. The helper waits for that, bounded; it never forces it.
+   closes. The helper, started from inside the installation it is about to
+   replace, first copies itself and the DLLs it loaded from there into the
+   private directory and continues from that copy -- otherwise its own
+   running image would be inside the backup when the backup is deleted,
+   which on Windows fails (#38). Then it waits for PE-bear to exit, bounded;
+   it never forces it.
 7. At the next start, reads the helper's result once, tells the user how it
    went -- including, after a refusal, that nothing was changed -- and forgets
    it. Before that, it acts on anything an earlier update left unfinished.
@@ -50,8 +55,10 @@ PE-bear                          pe-bear-updater
 -------                          ---------------
 verify package
 write handoff.json  ----------->  re-verify digest, canonicalise paths
-start helper                      check the target is updatable
-quit                              wait for PE-bear to exit (never kills it)
+start helper                      copy itself out of the installation,
+quit                              continue from the copy
+                                  check the target is updatable
+                                  wait for PE-bear to exit (never kills it)
                                   open a transaction
                                   stage the package
                                   check the staged tree is PE-bear
@@ -154,6 +161,7 @@ of a file that arrived over the network.
 | `DirectoryInstaller.*` | the one concrete installer: an installation that is a single directory |
 | `Installer.*` | the platform-independent ordering and failure handling |
 | `HelperHandoff.*` | the instruction file PE-bear writes and the helper refuses to trust |
+| `HelperRelocation.*` | the helper stepping out of the directory it replaces (#38) |
 | `ProcessControl.*` | waiting for a process and starting one, behind interfaces |
 | `StartupHandshake.*` | how a new build proves it works |
 | `UpdateHelper.*` | the helper's orchestration: the order of the refusals |

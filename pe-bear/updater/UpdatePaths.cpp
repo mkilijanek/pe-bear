@@ -122,6 +122,11 @@ QString UpdatePaths::transactionsDir() const
 	return QDir::cleanPath(m_root + QDir::separator() + QLatin1String("transactions"));
 }
 
+QString UpdatePaths::helperDir() const
+{
+	return QDir::cleanPath(m_root + QDir::separator() + QLatin1String("helper"));
+}
+
 QString UpdatePaths::logFilePath() const
 {
 	return QDir::cleanPath(m_root + QDir::separator() + QLatin1String("updater.log"));
@@ -132,7 +137,7 @@ bool UpdatePaths::prepare(QString *error)
 	/* No backups directory: backups go beside the installation, and none of
 	   this class's own directories are involved in them. */
 	const QString dirs[] = {
-		m_root, downloadsDir(), stagingDir(), transactionsDir()
+		m_root, downloadsDir(), stagingDir(), transactionsDir(), helperDir()
 	};
 	const int count = sizeof(dirs) / sizeof(dirs[0]);
 
