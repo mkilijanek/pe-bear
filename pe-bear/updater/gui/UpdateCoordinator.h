@@ -53,6 +53,14 @@ public:
 	 */
 	void recoverInterruptedUpdates();
 
+	/**
+	 * Tells the user how the last hand-off to pe-bear-updater ended, once,
+	 * and forgets it. Called after recovery at a normal start: by then the
+	 * helper has either relaunched this build or the user has opened it by
+	 * hand after a rollback, and either way the outcome is news to them.
+	 */
+	void reportLastInstallResult();
+
 public slots:
 	/** Called once the main window is visible. Never blocks startup. */
 	void onApplicationReady();
@@ -62,6 +70,7 @@ public slots:
 private slots:
 	void onAutoCheckTimeout();
 	void onInstallRequested();
+	void onInstallStarted();
 	void onStateChanged(int state);
 
 private:

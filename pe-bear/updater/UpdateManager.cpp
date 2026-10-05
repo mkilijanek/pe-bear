@@ -1,4 +1,6 @@
 #include "UpdateManager.h"
+#include "HelperHandoff.h"
+#include "DirectoryInstaller.h"
 
 using namespace pe_bear::updater;
 
@@ -8,7 +10,8 @@ UpdateManager::UpdateManager(IReleaseSource *source, IPackageDownloader *downloa
 	m_verifier(this), m_settings(settings),
 	m_profile(BuildProfile::current()), m_installableOverridden(false),
 	m_state(StateIdle), m_lastError(ErrorNone),
-	m_userInitiated(false), m_installConsentGiven(false)
+	m_userInitiated(false), m_installConsentGiven(false),
+	m_fs(&m_realFs), m_launcher(&m_realLauncher), m_helperPath(defaultHelperPath())
 {
 	qRegisterMetaType<pe_bear::updater::ReleaseInfo>("pe_bear::updater::ReleaseInfo");
 	qRegisterMetaType<pe_bear::updater::UpdateCandidate>("pe_bear::updater::UpdateCandidate");
@@ -259,15 +262,83 @@ void UpdateManager::onVerifyFinished(const pe_bear::updater::PackageVerifier::Re
 	emit readyToInstall(m_verified);
 }
 
+QString UpdateManager::defaultHelperPath()
+{
+	QString name = QLatin1String("pe-bear-updater");
+#if defined(Q_OS_WIN)
+	name += QLatin1String(".exe");
+#endif
+	return QDir::cleanPath(QCoreApplication::applicationDirPath() + QLatin1Char('/') + name);
+}
+
 void UpdateManager::requestInstall()
 {
 	if (!canInstall()) return;
 	/* Consent is recorded here and nowhere else; it is never inferred from a
 	   setting, and it is asked for again on every update. */
 	m_installConsentGiven = true;
-	failWith(ErrorInstallerUnavailable,
-		QLatin1String("the transactional installer is not part of this build"),
-		StateReadyToInstall);
+
+	/* Everything below is checked before anything is written, so that a
+	   refusal here leaves the verified package on disk and the state where it
+	   was: the user can fix the cause and press the button again. */
+	if (!m_verified.isValid()) {
+		failWith(ErrorInstallerUnavailable, QLatin1String("no verified package"), StateReadyToInstall);
+		return;
+	}
+	if (m_helperPath.isEmpty() || !m_fs->exists(m_helperPath) || m_fs->isDir(m_helperPath)) {
+		failWith(ErrorHelperMissing, QDir::toNativeSeparators(m_helperPath), StateReadyToInstall);
+		return;
+	}
+
+	/* The instruction file. Everything in it is re-checked by the helper in
+	   its own process; this is what PE-bear asks for, not what will happen. */
+	HelperHandoff handoff;
+	handoff.runId = HelperHandoff::generateRunId();
+	handoff.packagePath = m_verified.packagePath;
+	handoff.packageSha256 = m_verified.sha256;
+	handoff.packageSize = m_verified.size;
+	handoff.targetDir = m_installation.installDir;
+	handoff.expectedVersion = m_verified.candidate.release.version.toString();
+	handoff.parentPid = static_cast<qint64>(QCoreApplication::applicationPid());
+	handoff.relaunch = true;
+	handoff.createdAtUtc = QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
+	handoff.assetUrl = m_verified.candidate.asset.downloadUrl.toString();
+	handoff.releaseTag = m_verified.candidate.release.tagName;
+	handoff.assetName = m_verified.candidate.asset.name;
+	if (!handoff.isValid()) {
+		failWith(ErrorHandoffWriteFailed, QLatin1String("the instructions are not self-consistent"),
+			StateReadyToInstall);
+		return;
+	}
+
+	/* Owner-only, inside the private root: writeFile restricts what it
+	   writes, and the helper refuses an instruction from anywhere else. */
+	const QString handoffPath = QDir::cleanPath(m_paths.root() + QDir::separator()
+		+ HelperHandoff::fileName());
+	if (!m_fs->writeFile(handoffPath, handoff.toJson())) {
+		failWith(ErrorHandoffWriteFailed, m_fs->lastError(), StateReadyToInstall);
+		return;
+	}
+
+	/* Detached, with its output discarded by construction: the relaunched
+	   PE-bear inherits the helper's stdout, so a pipe here would be held open
+	   by the application that comes back and break on its first write once
+	   this process -- the reader -- is gone. */
+	QStringList args;
+	args << QLatin1String("--handoff") << handoffPath;
+	if (!m_launcher->startDetached(m_helperPath, args, parentDirectoryOf(m_helperPath))) {
+		/* The instruction is removed again: a helper that never started must
+		   not find it at some later, unrelated start. */
+		m_fs->removeFile(handoffPath);
+		failWith(ErrorHelperStartFailed, m_launcher->lastError(), StateReadyToInstall);
+		return;
+	}
+
+	/* From here the helper owns the outcome. This process has one job left,
+	   which is to get out of the way; the helper waits for that, bounded, and
+	   refuses rather than forces it. */
+	setState(StateInstalling);
+	emit installStarted();
 }
 
 void UpdateManager::skipCurrentVersion()

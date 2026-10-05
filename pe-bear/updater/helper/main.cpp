@@ -25,6 +25,7 @@
 #include "../DirectoryInstaller.h"
 #include "../ProcessControl.h"
 #include "../Version.h"
+#include "../HelperResult.h"
 
 #ifdef PEBEAR_WITH_LIBARCHIVE
 	#include "../LibArchiveReader.h"
@@ -183,6 +184,23 @@ int main(int argc, char *argv[])
 	say(UpdateHelper::resultMessage(result));
 
 	writeLog(fs, paths, handoff.runId, journal, result, helper.lastError());
+
+	/* For the PE-bear that starts next -- relaunched by this process, or
+	   opened by hand after a rollback. The exit code below is the same fact,
+	   but nobody is left to read it: the process that started this one has
+	   already closed. Written before the handoff is removed, so that a crash
+	   between the two leaves the result rather than only the instruction. */
+	HelperResult outcome;
+	outcome.runId = handoff.runId;
+	outcome.result = UpdateHelper::resultToString(result);
+	outcome.exitCode = UpdateHelper::resultToExitCode(result);
+	outcome.leftUntouched = UpdateHelper::leftUntouched(result);
+	outcome.message = UpdateHelper::resultMessage(result);
+	outcome.detail = helper.lastError();
+	outcome.finishedAtUtc = QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
+	if (!HelperResult::write(fs, paths, outcome)) {
+		complain(QLatin1String("could not record the result for PE-bear: ") + fs.lastError());
+	}
 
 	/* Removed whatever the outcome: it has been acted on, and a successful
 	   instruction left lying about is one a later run could pick up. */

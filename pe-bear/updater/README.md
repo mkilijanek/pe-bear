@@ -3,7 +3,9 @@
 Native update discovery for PE-bear, built on the GitHub Releases API.
 
 This directory contains milestones **M1** (discovery, download, verification)
-and **M2** (the transactional installer and the helper process). Remaining:
+and **M2** (the transactional installer, the helper process, recovery, and the
+hand-off from the GUI -- validated on Windows only to the extent recorded in
+#5 and #27). Remaining:
 M3 -- platform coverage for Linux and macOS packaging shapes -- and M4, which
 wires `PEBEAR_PACKAGE_TYPE` and the `pe-bear-build.json` manifest into the
 published packages. Until M4 does that, a release build still degrades to
@@ -22,10 +24,19 @@ notify-only, because it cannot prove which package would replace it.
 4. Confirms the size and the SHA-256 published by the API, streaming the hash so
    the window stays responsive. A package that does not match is deleted.
 5. Stops at `ReadyToInstall` and offers the user the choice.
-6. On the user's explicit confirmation, writes an instruction file and starts
-   `pe-bear-updater`, which waits for PE-bear to close, replaces the
-   installation inside a transaction, and commits only after the new build
-   proves it starts.
+6. On the user's explicit confirmation -- asked every time, with a count of
+   unsaved changes that would be lost -- writes an owner-only instruction file
+   into its private directory and starts `pe-bear-updater` detached, then
+   closes. The helper waits for that, bounded; it never forces it.
+7. At the next start, reads the helper's result once, tells the user how it
+   went -- including, after a refusal, that nothing was changed -- and forgets
+   it. Before that, it acts on anything an earlier update left unfinished.
+
+Between steps 6 and 7 nothing here runs. The helper re-checks the package
+digest and the paths in its own process, replaces the installation inside a
+transaction, commits only after the new build answers a one-time handshake,
+and restarts PE-bear. `UpdateManager` has one state for this, `Installing`,
+and it is the last one this process ever sees.
 
 ## How installing works
 

@@ -8,6 +8,8 @@
  */
 #include <QtTest>
 #include "../UpdateManager.h"
+#include "../HelperHandoff.h"
+#include "../ProcessControl.h"
 
 using namespace pe_bear::updater;
 
@@ -123,6 +125,41 @@ namespace {
 		int m_startCount;
 	};
 
+namespace {
+
+	/** Records what the manager tried to start; never starts anything. */
+	class StubLauncher : public pe_bear::updater::IProcessLauncher
+	{
+	public:
+		StubLauncher() : m_refuse(false), m_detached(0) {}
+		void setRefuses() { m_refuse = true; }
+		int detachedStarts() const { return m_detached; }
+		QString exe() const { return m_exe; }
+		QStringList args() const { return m_args; }
+		QString workingDir() const { return m_workingDir; }
+
+		virtual Result runAndWait(const QString &, const QStringList &, const QString &, int)
+		{
+			return Result();
+		}
+		virtual bool startDetached(const QString &exe, const QStringList &args,
+			const QString &workingDir)
+		{
+			m_detached++;
+			m_exe = exe; m_args = args; m_workingDir = workingDir;
+			return !m_refuse;
+		}
+		virtual QString lastError() const { return QLatin1String("stub launcher refused"); }
+
+	private:
+		bool m_refuse;
+		int m_detached;
+		QString m_exe, m_workingDir;
+		QStringList m_args;
+	};
+
+}; // namespace
+
 class TestUpdateManager : public QObject
 {
 	Q_OBJECT
@@ -146,7 +183,9 @@ private slots:
 	void survivesANetworkFailureWithoutBlockingAnything();
 	void cancellingADownloadKeepsTheOffer();
 	void installRequiresReadyToInstall();
-	void installIsRefusedCleanlyWhileThereIsNoInstaller();
+	void installWritesTheHandoffAndStartsTheHelper();
+	void aMissingHelperIsReportedBeforeAnythingIsWritten();
+	void aHelperThatCannotStartLeavesThePackageAndRemovesTheHandoff();
 	void skippingAVersionSilencesOnlyAutomaticChecks();
 	void automaticCheckRespectsTheInterval();
 	void aSecondCheckIsIgnoredWhileOneIsRunning();
@@ -452,8 +491,13 @@ void TestUpdateManager::installRequiresReadyToInstall()
 	QCOMPARE(errors.count(), 0);
 }
 
-void TestUpdateManager::installIsRefusedCleanlyWhileThereIsNoInstaller()
+void TestUpdateManager::installWritesTheHandoffAndStartsTheHelper()
 {
+	/* The whole hand-off, observed from the outside: a file the helper can
+	   parse, a process start with the right arguments, and this process
+	   being told to get out of the way. The file is real, not faked -- the
+	   manager writes through RealFileSystem by default, and the point of
+	   parsing it back with HelperHandoff::fromJson is that the helper will. */
 	const QByteArray content("package bytes");
 	m_source->setRelease(makeRelease(QLatin1String(NEWER_TAG), content));
 	m_downloader->setContent(content);
@@ -463,14 +507,99 @@ void TestUpdateManager::installIsRefusedCleanlyWhileThereIsNoInstaller()
 	m_manager->checkForUpdates(true);
 	QVERIFY(ready.wait(5000));
 
+	/* A helper that exists, beside nothing in particular. */
+	const QString helper = QDir(m_tmp->path()).absoluteFilePath("pe-bear-updater");
+	QFile h(helper); QVERIFY(h.open(QIODevice::WriteOnly)); h.write("stub"); h.close();
+	m_manager->setHelperPath(helper);
+	StubLauncher launcher;
+	m_manager->setProcessLauncher(&launcher);
+
+	QSignalSpy started(m_manager, SIGNAL(installStarted()));
+	QSignalSpy errors(m_manager, SIGNAL(errorOccurred(int, QString)));
+	m_manager->requestInstall();
+
+	QCOMPARE(errors.count(), 0);
+	QCOMPARE(started.count(), 1);
+	QCOMPARE(m_manager->state(), StateInstalling);
+
+	QCOMPARE(launcher.detachedStarts(), 1);
+	QCOMPARE(launcher.exe(), helper);
+	QCOMPARE(launcher.args().size(), 2);
+	QCOMPARE(launcher.args().at(0), QLatin1String("--handoff"));
+
+	/* The instruction the helper will read: inside the private root, and
+	   describing exactly the verified package and this installation. */
+	const QString handoffPath = launcher.args().at(1);
+	QVERIFY(handoffPath.startsWith(QDir(m_tmp->path()).absoluteFilePath("updates")));
+	QFile f(handoffPath);
+	QVERIFY2(f.open(QIODevice::ReadOnly), "the handoff was not written where the helper was told to look");
+	bool ok = false;
+	const HelperHandoff handoff = HelperHandoff::fromJson(f.readAll(), &ok);
+	QVERIFY2(ok, "the handoff does not parse as the helper would parse it");
+	QCOMPARE(handoff.packagePath, m_manager->verifiedUpdate().packagePath);
+	QCOMPARE(handoff.packageSha256, m_manager->verifiedUpdate().sha256);
+	QCOMPARE(handoff.packageSize, m_manager->verifiedUpdate().size);
+	QCOMPARE(handoff.targetDir, m_manager->installation().installDir);
+	QCOMPARE(handoff.parentPid, static_cast<qint64>(QCoreApplication::applicationPid()));
+	QVERIFY(handoff.relaunch);
+	QVERIFY(handoff.expected().isValid());
+}
+
+void TestUpdateManager::aMissingHelperIsReportedBeforeAnythingIsWritten()
+{
+	const QByteArray content("package bytes");
+	m_source->setRelease(makeRelease(QLatin1String(NEWER_TAG), content));
+	m_downloader->setContent(content);
+	QSignalSpy ready(m_manager, SIGNAL(readyToInstall(pe_bear::updater::VerifiedUpdate)));
+	m_settings.setAutoDownloadEnabled(true);
+	m_manager->checkForUpdates(true);
+	QVERIFY(ready.wait(5000));
+
+	m_manager->setHelperPath(QDir(m_tmp->path()).absoluteFilePath("no-such-helper"));
+	StubLauncher launcher;
+	m_manager->setProcessLauncher(&launcher);
+
 	QSignalSpy errors(m_manager, SIGNAL(errorOccurred(int, QString)));
 	m_manager->requestInstall();
 
 	QCOMPARE(errors.count(), 1);
-	QCOMPARE(m_manager->lastError(), ErrorInstallerUnavailable);
-	/* The verified package is kept and the state does not regress. */
+	QCOMPARE(m_manager->lastError(), ErrorHelperMissing);
+	/* Nothing started, nothing written, and the user can try again. */
+	QCOMPARE(launcher.detachedStarts(), 0);
+	QVERIFY(!QFile::exists(QDir(m_tmp->path()).absoluteFilePath("updates/" + HelperHandoff::fileName())));
 	QCOMPARE(m_manager->state(), StateReadyToInstall);
 	QVERIFY(QFile::exists(m_manager->verifiedUpdate().packagePath));
+}
+
+void TestUpdateManager::aHelperThatCannotStartLeavesThePackageAndRemovesTheHandoff()
+{
+	const QByteArray content("package bytes");
+	m_source->setRelease(makeRelease(QLatin1String(NEWER_TAG), content));
+	m_downloader->setContent(content);
+	QSignalSpy ready(m_manager, SIGNAL(readyToInstall(pe_bear::updater::VerifiedUpdate)));
+	m_settings.setAutoDownloadEnabled(true);
+	m_manager->checkForUpdates(true);
+	QVERIFY(ready.wait(5000));
+
+	const QString helper = QDir(m_tmp->path()).absoluteFilePath("pe-bear-updater");
+	QFile h(helper); QVERIFY(h.open(QIODevice::WriteOnly)); h.write("stub"); h.close();
+	m_manager->setHelperPath(helper);
+	StubLauncher launcher;
+	launcher.setRefuses();
+	m_manager->setProcessLauncher(&launcher);
+
+	QSignalSpy started(m_manager, SIGNAL(installStarted()));
+	QSignalSpy errors(m_manager, SIGNAL(errorOccurred(int, QString)));
+	m_manager->requestInstall();
+
+	QCOMPARE(started.count(), 0);
+	QCOMPARE(errors.count(), 1);
+	QCOMPARE(m_manager->lastError(), ErrorHelperStartFailed);
+	QCOMPARE(m_manager->state(), StateReadyToInstall);
+	QVERIFY(QFile::exists(m_manager->verifiedUpdate().packagePath));
+	/* The instruction is taken back: a helper that never started must not
+	   find it at some later, unrelated start. */
+	QVERIFY(!QFile::exists(launcher.args().at(1)));
 }
 
 void TestUpdateManager::skippingAVersionSilencesOnlyAutomaticChecks()

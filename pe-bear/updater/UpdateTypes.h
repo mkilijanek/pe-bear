@@ -8,8 +8,8 @@ namespace pe_bear {
 namespace updater {
 
 /**
- * States of the update flow. v1 stops at ReadyToInstall: platform activation
- * is out of scope until the transactional installer lands.
+ * States of the update flow. Installing hands off to pe-bear-updater and ends
+ * this process; the outcome arrives at the next start, through HelperResult.
  */
 enum UpdateState {
 	StateIdle = 0,
@@ -19,6 +19,8 @@ enum UpdateState {
 	StateDownloading,
 	StateVerifying,
 	StateReadyToInstall,
+	/** The helper has been started; this process is about to close. */
+	StateInstalling,
 	StateNoCompatibleAsset,
 	StateManagedInstallation,
 	StateFailed,
@@ -54,6 +56,11 @@ enum UpdateError {
 	/* the installation sits where replacing the directory would destroy
 	   other things: a personal folder or a filesystem root */
 	ErrorProtectedLocation,
+	/* install hand-off: nothing below changes the installation; it is the
+	   helper that does, and these are the ways of failing to reach it */
+	ErrorHelperMissing,
+	ErrorHandoffWriteFailed,
+	ErrorHelperStartFailed,
 	UPDATE_ERRORS_COUNT
 };
 

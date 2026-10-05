@@ -33,6 +33,7 @@ set (update_core_srcs
 	ProcessControl.cpp
 	UpdateHelper.cpp
 	Recovery.cpp
+	HelperResult.cpp
 	Random.cpp
 )
 
@@ -64,6 +65,7 @@ set (update_core_hdrs
 	ProcessControl.h
 	UpdateHelper.h
 	Recovery.h
+	HelperResult.h
 	Random.h
 )
 

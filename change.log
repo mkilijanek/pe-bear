@@ -506,3 +506,50 @@ Czego tu nie ma: e2e z zabiciem prawdziwego helpera między backupem a aktywacj�
 PE-bear odpowiada na handshake zbyt szybko, żeby trafić SIGKILL w to okno bez instrumentacji.
 Przywrócenie na prawdziwych plikach jest pokryte przez tst_crossvolumeinstall, kolejność w
 helperze przez tst_updatehelper na atrapie.
+
+2026-10-05T16:32:20Z starting #35: wire Install and Restart - requestInstall() writes the handoff and starts pe-bear-updater instead of failing, PE-bear closes, and the helper's result is read back and shown at the next start; the exit-code contract finally gets a consumer
+
+2026-10-05 #35 - wpięcie "Install and Restart". Do tej pory requestInstall() zapisywał zgodę i
+kończył ErrorInstallerUnavailable, a kontrakt kodów wyjścia helpera nie miał konsumenta.
+
+Przebieg po stronie PE-beara: requestInstall() sprawdza, że helper istnieje obok PE-bear(.exe)
+(jedno miejsce, defaultHelperPath(); jeśli B1 z #27 go przeniesie, zmienia się ta funkcja),
+buduje HelperHandoff z m_verified i m_installation (parentPid = własny pid, relaunch = true),
+zapisuje go owner-only do prywatnego root przez IFileSystem, startuje helpera odczepionego -
+bez potoku, bo restartowany PE-bear dziedziczy stdout helpera i potok pękłby przy pierwszym
+zapisie, gdy czytający już nie żyje - i przechodzi w StateInstalling, emitując installStarted().
+Koordynator na ten sygnał zamyka główne okno: closeEvent pisze ustawienia i autozapisuje tagi,
+a quitOnLastWindowClosed kończy proces. Nikt nie pyta drugi raz; pytanie z liczbą niezapisanych
+zmian padło przed zapisem handoffu. Każda odmowa (brak helpera, nieudany zapis, nieudany start)
+zostawia ReadyToInstall i paczkę na dysku, więc użytkownik może naprawić przyczynę i kliknąć
+ponownie - a przy nieudanym starcie handoff jest zabierany z powrotem, żeby helper, który
+nigdy nie wystartował, nie znalazł go przy jakimś późniejszym, niezwiązanym uruchomieniu.
+
+Droga powrotna: helper, zanim usunie handoff, pisze HelperResult do last-result.json - wynik
+po NAZWIE, kod wyjścia, leftUntouched wprost, przetłumaczony komunikat, detail. Kod wyjścia był
+kontraktem, którego nikt nie czytał: proces, który helpera uruchomił, już nie istnieje. Następny
+PE-bear w onApplicationReady, po recovery, konsumuje plik - czyta i USUWA, cokolwiek zawierał -
+i pokazuje jedno okno: information po sukcesie, warning po porażce, z dopiskiem "Your
+installation was not changed", gdy helper tak zaświadczył. Pokazane raz to informacja; przy
+każdym starcie to zrzędzenie. Plik nieczytelny też jest usuwany, żeby nie potykać się o niego
+wiecznie. Pola typowane jak w handoffie - brakujące leftUntouched czytałoby się jako false,
+czyli "zmieniono Twoje pliki" przez przemilczenie.
+
+README: krok 6 opisuje teraz to, co kod robi, dodany krok 7 o odczycie wyniku - w tej samej
+zmianie co kod, jak żąda #34.
+
+Weryfikacja: 33 z 33 lokalnie; tst_helperresult (10, nowy), tst_updatemanager 18 -> 20 (trzy
+nowe testy w miejsce jednego, który pilnował starej odmowy). Handoff w teście managera jest
+PRAWDZIWYM plikiem, parsowanym z powrotem przez HelperHandoff::fromJson - tak, jak zrobi to
+helper. Cztery mutacje, każda złapana: usunięte sprawdzenie istnienia helpera, handoff
+niezabrany po nieudanym starcie, consume() zostawiające plik, hand-off bez installStarted().
+E2e na Linuksie: prawdziwy helper na prawdziwym handoffie zapisał last-result.json owner-only,
+w kształcie, którego fromJson wymaga, z Succeeded/0; instalacja podmieniona.
+
+Jedna pomyłka złapana przez kompilator: UpdatePaths paths(QLatin1String(ROOT), ...) w teście
+to most vexing parse - deklaracja funkcji, nie obiekt. Nazwany QString ją usuwa.
+
+Czego nie ma: kliknięcia w GUI od początku do końca bez ręcznego JSON-a. Manager jest
+sprawdzony ze stubem launchera na prawdziwym pliku, helper na prawdziwym handoffie; sam klik
+i QMessageBox po restarcie wymagają sesji okienkowej. To do walidacji na hoście Windows wraz
+z B1 z #27.
