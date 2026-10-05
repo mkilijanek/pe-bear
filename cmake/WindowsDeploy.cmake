@@ -87,7 +87,21 @@ endif()
 # This module resolves the actual DLLs. _SKIP stops it adding install rules;
 # only the variable is wanted.
 set(CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS_SKIP ON)
-set(CMAKE_INSTALL_UCRT_LIBRARIES ON)
+
+# The Universal CRT is left out unless asked for. It is an operating system
+# component from Windows 10 onwards, which Qt 6.8 requires anyway, so copying
+# it adds forty-odd api-ms-win-crt-*.dll files that are already present on any
+# machine that can run this.
+#
+# That is not only about size. The updater replaces this directory wholesale,
+# and on Windows every file in it is another chance for an open handle to make
+# the replacement fail -- so a deployment carrying files nothing needs makes
+# the thing being tested harder than it has to be.
+#
+# Settable from the command line for a build targeting something older.
+if(NOT DEFINED CMAKE_INSTALL_UCRT_LIBRARIES)
+	set(CMAKE_INSTALL_UCRT_LIBRARIES OFF)
+endif()
 include(InstallRequiredSystemLibraries)
 
 if(CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS)
