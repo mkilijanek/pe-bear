@@ -106,11 +106,17 @@ namespace {
 		if (here < 0) return QString();
 
 		QStringList candidates;
+#if defined(Q_OS_UNIX)
+		/* Guarded, and not only because geteuid is POSIX: this whole search is
+		   reachable only where deviceOf() can answer, which is the same
+		   platforms. Leaving the call unguarded was a compile error on MSVC --
+		   and one I missed, because the host reports diagnostics in its own
+		   language and the build check was grepping for the English word. */
 		candidates << QLatin1String("/dev/shm")
 			<< QLatin1String("/run/user/") + QString::number(::geteuid())
-			<< QLatin1String("/var/tmp")
-			<< QDir::tempPath()
-			<< QDir::homePath();
+			<< QLatin1String("/var/tmp");
+#endif
+		candidates << QDir::tempPath() << QDir::homePath();
 
 		for (int i = 0; i < candidates.size(); i++) {
 			const QString &c = candidates.at(i);
