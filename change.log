@@ -59,3 +59,22 @@ PackageExtractor stosuje reguły i zapisuje kroki jako TransactionOp dla journal
 lista wpisów jest oceniana przed zapisaniem czegokolwiek, więc archiwum złośliwe dopiero w
 ostatnim wpisie nie zostawia drzewa częściowego - stanu, którego kolejny krok nie odróżniłby od
 sukcesu.
+
+2026-10-05T06:43:16Z starting the libarchive-backed IArchiveReader for #20, decoder chosen by the repo owner; optional via PEBEAR_WITH_LIBARCHIVE so the default build does not suddenly gain a dependency
+
+2026-10-05 LibArchiveReader dodany dla #20: libarchive wybrane przez właściciela repo. Czyta
+ZIP i TAR.XZ, czyli formaty, w których projekt wydaje pakiety. Zestaw formatów i filtrów jest
+celowo zawężony - archive_read_support_format_all() przyjęłoby też cpio, 7zip i RAR, czyli kod
+dekodera osiągalny przez wrogi plik bez żadnego zysku. Test pisze prawdziwe archiwa przez
+libarchive i sprawdza, że cpio jest odrzucone.
+
+Reader wyłącznie opisuje wpisy i oddaje bajty; całe orzekanie zostaje w ExtractionPolicy.
+Dekoder, który normalizowałby ścieżki, ukryłby właśnie te kształty, przed którymi polityka
+broni - osobny test pilnuje, że traversal wraca nietknięty.
+
+Opcjonalne przez PEBEAR_WITH_LIBARCHIVE=ON. Bez biblioteki build się udaje i updater potrafi
+sprawdzić i pobrać, ale nie zainstalować - ta sama degradacja do notify-only co przy braku
+deskryptorów pakietu. CMake ostrzega wtedy wprost, a test raportuje skip, nie ciszę.
+
+CI: apt na Linuksie, brew na macOS (keg-only, prefix wskazany jawnie), vcpkg na Windows -
+preinstalowany na runnerach, ciągnie zlib/bzip2/lzma sam.
