@@ -99,6 +99,7 @@ private slots:
 	void refusesWhatTheDetectorSaysIsNotUpdatable();
 	void refusesWhatTheDetectorSaysIsNotUpdatable_data();
 	void refusesAnInstallWithNoExecutable();
+	void refusesAFilesystemRoot();
 	void refusesAnInstallDirectoryThatIsNotADirectory();
 	void refusesAWritableDirectoryInsideAReadOnlyParent();
 
@@ -154,6 +155,8 @@ void TestDirectoryInstaller::refusesWhatTheDetectorSaysIsNotUpdatable_data()
 	QTest::newRow("unknown, writable")   << int(InstallUnknown)  << true;
 	QTest::newRow("portable, read-only") << int(InstallPortable) << false;
 	QTest::newRow("system, read-only")   << int(InstallSystem)   << false;
+	/* Writable and still refused: the directory is somebody's Desktop. */
+	QTest::newRow("user folder, writable") << int(InstallUserFolder) << true;
 }
 
 void TestDirectoryInstaller::refusesWhatTheDetectorSaysIsNotUpdatable()
@@ -171,6 +174,25 @@ void TestDirectoryInstaller::refusesWhatTheDetectorSaysIsNotUpdatable()
 	QString why;
 	QVERIFY(!installer.canInstall(info, &why));
 	QVERIFY(!why.isEmpty());
+}
+
+void TestDirectoryInstaller::refusesAFilesystemRoot()
+{
+	/* The detector refuses these too; this is the belt to its braces, since
+	   the two are reached by different callers and a root must be refused by
+	   whichever one asks. A root has no parent to move it within. */
+	const QString root = QLatin1String("/");
+	m_fs.addDir(root);
+	m_fs.addFile(root + exeName(), QByteArray("elf"));
+
+	InstallationInfo info = aPortableInstall();
+	info.installDir = root;
+	info.executablePath = root + exeName();
+
+	DirectoryInstaller installer(&m_fs, &m_reader);
+	QString why;
+	QVERIFY(!installer.canInstall(info, &why));
+	QVERIFY2(why.contains(QLatin1String("filesystem root")), qPrintable(why));
 }
 
 void TestDirectoryInstaller::refusesAnInstallWithNoExecutable()

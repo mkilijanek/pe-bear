@@ -41,6 +41,9 @@ private slots:
 #ifdef Q_OS_LINUX
 	void systemDirectoriesAreRecognised_data();
 	void systemDirectoriesAreRecognised();
+	void aPersonalFolderItselfIsNeverUpdatable();
+	void aSubdirectoryOfAPersonalFolderIsFine();
+	void aFilesystemRootIsNeverUpdatable();
 #endif
 };
 
@@ -162,6 +165,52 @@ void TestInstallationDetector::systemDirectoriesAreRecognised()
 	QCOMPARE(int(info.kind), kind);
 }
 #endif
+
+void TestInstallationDetector::aPersonalFolderItselfIsNeverUpdatable()
+{
+	/* A portable build unzipped straight onto the Desktop: common, and the
+	   one layout the directory-swapping installer must never touch, because
+	   replacing the directory would replace the Desktop. The folder is
+	   declared rather than looked up, so this does not depend on where the
+	   test happens to run. */
+	QTemporaryDir desktop;
+	const InstallationInfo info = InstallationDetector::detectAt(
+		desktop.path(), QDir(desktop.path()).absoluteFilePath("PE-bear"), env(),
+		QStringList() << QFileInfo(desktop.path()).canonicalFilePath());
+
+	QCOMPARE(info.kind, InstallUserFolder);
+	QVERIFY2(!info.isUpdatable(), "a personal folder was offered for replacement");
+	QVERIFY2(info.detail.contains(QLatin1String("personal folder")), qPrintable(info.detail));
+	/* Writable, and still refused: writability is not the question here. */
+	QVERIFY(info.writable);
+}
+
+void TestInstallationDetector::aSubdirectoryOfAPersonalFolderIsFine()
+{
+	/* Desktop/pe-bear is a perfectly good place; only the Desktop itself is
+	   not. Refusing subdirectories would refuse nearly every portable install. */
+	QTemporaryDir desktop;
+	const QString inside = QDir(desktop.path()).absoluteFilePath("pe-bear");
+	QVERIFY(QDir().mkpath(inside));
+
+	const InstallationInfo info = InstallationDetector::detectAt(
+		inside, inside + QLatin1String("/PE-bear"), env(),
+		QStringList() << QFileInfo(desktop.path()).canonicalFilePath());
+
+	QCOMPARE(info.kind, InstallPortable);
+	QVERIFY(info.isUpdatable());
+}
+
+void TestInstallationDetector::aFilesystemRootIsNeverUpdatable()
+{
+	const QString root = QDir::rootPath();
+	const InstallationInfo info = InstallationDetector::detectAt(
+		root, root + QLatin1String("PE-bear"), env(), QStringList());
+
+	QCOMPARE(info.kind, InstallUserFolder);
+	QVERIFY(!info.isUpdatable());
+	QVERIFY2(info.detail.contains(QLatin1String("root")), qPrintable(info.detail));
+}
 
 QTEST_MAIN(TestInstallationDetector)
 #include "tst_installationdetector.moc"

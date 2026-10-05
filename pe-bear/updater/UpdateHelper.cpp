@@ -4,6 +4,7 @@
 #include "PackageVerifier.h"
 #include "TransactionJournal.h"
 #include "InstallationDetector.h"
+#include "Recovery.h"
 
 namespace pe_bear {
 namespace updater {
@@ -27,6 +28,7 @@ namespace {
 		{ UpdateHelper::RefusedPackageMismatch,    "RefusedPackageMismatch",    12 },
 		{ UpdateHelper::RefusedTarget,             "RefusedTarget",             13 },
 		{ UpdateHelper::RefusedParentStillRunning, "RefusedParentStillRunning", 14 },
+		{ UpdateHelper::RefusedUpdateInProgress,   "RefusedUpdateInProgress",   15 },
 		{ UpdateHelper::RolledBack,                "RolledBack",                20 },
 		{ UpdateHelper::NeedsAttention,            "NeedsAttention",            30 },
 		{ UpdateHelper::InternalError,             "InternalError",             40 }
@@ -62,6 +64,7 @@ bool UpdateHelper::leftUntouched(Result r)
 		case RefusedPackageMismatch:
 		case RefusedTarget:
 		case RefusedParentStillRunning:
+		case RefusedUpdateInProgress:
 			return true;
 		default:
 			/* Succeeded changed things on purpose; RolledBack tried to put
@@ -92,6 +95,9 @@ QString UpdateHelper::resultMessage(Result r)
 		case RefusedParentStillRunning:
 			return QCoreApplication::translate("Updater",
 				"PE-bear was still running, so the update was not applied. Nothing was changed.");
+		case RefusedUpdateInProgress:
+			return QCoreApplication::translate("Updater",
+				"Another update of this installation is still in progress or was interrupted moments ago. Nothing was changed.");
 		case RolledBack:
 			return QCoreApplication::translate("Updater",
 				"The update failed and the previous version was restored.");
@@ -109,7 +115,7 @@ QString UpdateHelper::resultMessage(Result r)
 UpdateHelper::UpdateHelper(IFileSystem *fs, PlatformInstaller *platform, IProcessProbe *probe,
 		IProcessLauncher *launcher, const UpdatePaths &paths, const Limits &limits)
 	: m_fs(fs), m_platform(platform), m_probe(probe), m_launcher(launcher),
-	m_paths(paths), m_limits(limits)
+	m_paths(paths), m_limits(limits), m_protectedSet(false)
 {
 }
 
@@ -271,7 +277,8 @@ UpdateHelper::Result UpdateHelper::checkTarget(const HelperHandoff &handoff, Ins
 	   managed installation is two places to drift apart, and the consequence
 	   of drift is the updater touching files a package manager owns. */
 	InstallationInfo detected = InstallationDetector::detectAt(canonicalTarget, exe,
-		InstallationDetector::currentEnvironment());
+		InstallationDetector::currentEnvironment(),
+		m_protectedSet ? m_protected : InstallationDetector::protectedDirectories());
 	detected.installDir = canonicalTarget;
 	detected.executablePath = exe;
 
@@ -292,6 +299,34 @@ UpdateHelper::Result UpdateHelper::checkTarget(const HelperHandoff &handoff, Ins
 	if (info) *info = detected;
 	note(QLatin1String("target accepted: ") + QDir::toNativeSeparators(canonicalTarget)
 		+ QLatin1String(" (") + installationKindToString(detected.kind) + QLatin1String(")"));
+	return Succeeded;
+}
+
+UpdateHelper::Result UpdateHelper::recoverEarlierRuns(const QString &canonicalTarget,
+		TransactionJournal *journal)
+{
+	if (!journal->prepare()) {
+		return refuse(InternalError, QLatin1String("could not prepare the transaction record: ")
+			+ journal->lastError());
+	}
+
+	Recovery recovery(m_fs, journal);
+	if (m_now.isValid()) recovery.setNow(m_now);
+	/* No runningFrom: the helper is never the installation, so an old
+	   activated record is rolled back, not kept -- nothing here can vouch
+	   for that build. */
+	const QList<Recovery::Outcome> outcomes = recovery.run();
+
+	const QStringList lines = recovery.journal();
+	for (int i = 0; i < lines.size(); i++) note(lines.at(i));
+
+	if (recovery.blocksNewUpdateOf(canonicalTarget)) {
+		return refuse(RefusedUpdateInProgress,
+			QLatin1String("an earlier update of this installation is unfinished and could not be recovered first"));
+	}
+	if (!outcomes.isEmpty()) {
+		note(QLatin1String("earlier runs recovered: ") + QString::number(outcomes.size()));
+	}
 	return Succeeded;
 }
 
@@ -404,6 +439,18 @@ UpdateHelper::Result UpdateHelper::run(const HelperHandoff &handoff)
 	r = checkPackage(handoff);
 	if (r != Succeeded) return r;
 
+	/* Whatever an earlier run left behind is dealt with *before the target is
+	   examined*, not after. After a helper dies between backup and activation
+	   the installation directory does not exist -- it is sitting beside its
+	   old place under a backup name -- and a check that ran first would refuse
+	   it as "not a directory" before recovery ever got to put it back. This
+	   can change the disk, but only ever towards the state the installation
+	   was in before the abandoned attempt, and only for records old enough to
+	   be nobody's. */
+	TransactionJournal journal(m_fs, m_paths.transactionsDir());
+	r = recoverEarlierRuns(handoff.targetDir, &journal);
+	if (r != Succeeded) return r;
+
 	InstallationInfo installation;
 	r = checkTarget(handoff, &installation);
 	if (r != Succeeded) return r;
@@ -412,11 +459,6 @@ UpdateHelper::Result UpdateHelper::run(const HelperHandoff &handoff)
 	if (r != Succeeded) return r;
 
 	/* From here on something can change. */
-	TransactionJournal journal(m_fs, m_paths.transactionsDir());
-	if (!journal.prepare()) {
-		return refuse(InternalError, QLatin1String("could not prepare the transaction record: ")
-			+ journal.lastError());
-	}
 
 	Installer installer(m_fs, m_platform, &journal, m_paths);
 	installer.setInstallation(installation);

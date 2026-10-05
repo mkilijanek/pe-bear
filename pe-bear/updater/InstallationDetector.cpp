@@ -1,4 +1,5 @@
 #include "InstallationDetector.h"
+#include "FileSystem.h"
 
 using namespace pe_bear::updater;
 
@@ -8,6 +9,7 @@ QString pe_bear::updater::installationKindToString(InstallationKind k)
 		case InstallPortable: return QLatin1String("portable");
 		case InstallSystem: return QLatin1String("system");
 		case InstallManaged: return QLatin1String("managed");
+		case InstallUserFolder: return QLatin1String("user-folder");
 		default: return QLatin1String("unknown");
 	}
 }
@@ -90,8 +92,34 @@ bool InstallationDetector::isDirectoryWritable(const QString &dirPath)
 	return false;
 }
 
+QStringList InstallationDetector::protectedDirectories()
+{
+	static const QStandardPaths::StandardLocation KINDS[] = {
+		QStandardPaths::DesktopLocation, QStandardPaths::DocumentsLocation,
+		QStandardPaths::DownloadLocation, QStandardPaths::PicturesLocation,
+		QStandardPaths::MusicLocation, QStandardPaths::MoviesLocation,
+		QStandardPaths::HomeLocation
+	};
+	QStringList out;
+	for (size_t i = 0; i < sizeof(KINDS) / sizeof(KINDS[0]); i++) {
+		const QStringList found = QStandardPaths::standardLocations(KINDS[i]);
+		for (int j = 0; j < found.size(); j++) {
+			const QString canonical = QFileInfo(found.at(j)).canonicalFilePath();
+			if (!canonical.isEmpty() && !out.contains(canonical)) out << canonical;
+		}
+	}
+	return out;
+}
+
 InstallationInfo InstallationDetector::detectAt(const QString &appDirPath,
 	const QString &appFilePath, const QMap<QString, QString> &env)
+{
+	return detectAt(appDirPath, appFilePath, env, protectedDirectories());
+}
+
+InstallationInfo InstallationDetector::detectAt(const QString &appDirPath,
+	const QString &appFilePath, const QMap<QString, QString> &env,
+	const QStringList &protectedDirs)
 {
 	InstallationInfo info;
 	info.installDir = normalized(appDirPath);
@@ -103,6 +131,29 @@ InstallationInfo InstallationDetector::detectAt(const QString &appDirPath,
 		return info;
 	}
 	info.writable = isDirectoryWritable(info.installDir);
+
+	/* 0. Places an installation must never *be*. Decided before anything
+	      else, because every later classification is about who owns the
+	      files, and this one is about what else lives beside them. */
+	{
+		QString canonical = QFileInfo(info.installDir).canonicalFilePath();
+		if (canonical.isEmpty()) canonical = info.installDir;
+		const QString parent = parentDirectoryOf(canonical);
+		if (parent.isEmpty() || parent == canonical) {
+			info.kind = InstallUserFolder;
+			info.detail = QLatin1String("sits at a filesystem root");
+			return info;
+		}
+		for (int i = 0; i < protectedDirs.size(); i++) {
+			const QString p = protectedDirs.at(i);
+			if (canonical == p || info.installDir == p) {
+				info.kind = InstallUserFolder;
+				info.detail = QLatin1String("sits directly in a personal folder (")
+					+ QFileInfo(p).fileName() + QLatin1String(")");
+				return info;
+			}
+		}
+	}
 
 	/* 1. Sandboxes own their payload outright. */
 	if (!envValue(env, "FLATPAK_ID").isEmpty()) {

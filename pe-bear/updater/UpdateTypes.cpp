@@ -43,6 +43,7 @@ QString pe_bear::updater::updateErrorToString(UpdateError e)
 		case ErrorStorage: return QLatin1String("Storage");
 		case ErrorCancelled: return QLatin1String("Cancelled");
 		case ErrorInstallerUnavailable: return QLatin1String("InstallerUnavailable");
+		case ErrorProtectedLocation: return QLatin1String("ProtectedLocation");
 		default: return QLatin1String("Invalid");
 	}
 }
@@ -92,6 +93,9 @@ QString pe_bear::updater::updateErrorMessage(UpdateError e)
 			return QCoreApplication::translate("Updater", "Cancelled.");
 		case ErrorInstallerUnavailable:
 			return QCoreApplication::translate("Updater", "Installation is not available in this build.");
+		case ErrorProtectedLocation:
+			return QCoreApplication::translate("Updater",
+				"This copy of PE-bear sits directly in a personal folder, so it will not be replaced: an update would remove everything else kept there.");
 		default:
 			return QCoreApplication::translate("Updater", "Unknown error.");
 	}

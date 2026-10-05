@@ -51,6 +51,9 @@ enum UpdateError {
 	ErrorCancelled,
 	/* install preparation */
 	ErrorInstallerUnavailable,
+	/* the installation sits where replacing the directory would destroy
+	   other things: a personal folder or a filesystem root */
+	ErrorProtectedLocation,
 	UPDATE_ERRORS_COUNT
 };
 

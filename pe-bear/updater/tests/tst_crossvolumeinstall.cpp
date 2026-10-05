@@ -21,6 +21,8 @@
 #include "../FileSystem.h"
 #include "../TransactionJournal.h"
 #include "../UpdatePaths.h"
+#include "../Transaction.h"
+#include "../Recovery.h"
 
 #if defined(Q_OS_UNIX)
 	#include <sys/stat.h>
@@ -139,6 +141,7 @@ private slots:
 	void installsAnInstallationOnAnotherVolume();
 	void committingReclaimsTheStagingTree();
 	void theStagingRootGoesWhenItIsEmpty();
+	void anInterruptedBackupIsRestoredByTheNextRun();
 
 private:
 	/**
@@ -346,6 +349,62 @@ void TestCrossVolumeInstall::theStagingRootGoesWhenItIsEmpty()
 
 	const QString stagingRoot = parentDirectoryOf(stagingDir);
 	QVERIFY2(!QDir(stagingRoot).exists(), qPrintable(stagingRoot));
+}
+
+void TestCrossVolumeInstall::anInterruptedBackupIsRestoredByTheNextRun()
+{
+	/* The fake-filesystem version of this lives in tst_recovery. This one is
+	   on real files, because the thing being recovered is a real directory
+	   that was really renamed, and "the move back works" is a claim about the
+	   filesystem, not about the planner. */
+	QTemporaryDir installRoot;
+	QTemporaryDir updaterRoot;
+	QVERIFY(installRoot.isValid() && updaterRoot.isValid());
+
+	const QString installDir = installRoot.path() + QLatin1String("/pe-bear");
+	QVERIFY(QDir().mkpath(installDir));
+	QFile old(installDir + QLatin1Char('/') + exeName());
+	QVERIFY(old.open(QIODevice::WriteOnly));
+	QVERIFY(old.write("the old build") == 13);
+	old.close();
+
+	const UpdatePaths paths(updaterRoot.path(),
+		UpdatePaths::preferredStagingRoot(installDir, updaterRoot.path()));
+	TransactionJournal journal(&m_fs, paths.transactionsDir());
+	QVERIFY(journal.prepare());
+
+	const QString backup = parentDirectoryOf(installDir) + QLatin1Char('/')
+		+ QLatin1String(UpdatePaths::BACKUP_DIR_NAME) + QLatin1String("dead");
+	{
+		TransactionRecord seed;
+		seed.targetDir = installDir;
+		seed.stagingDir = paths.stagingDir() + QLatin1String("/dead");
+		seed.stagingRoot = paths.stagingDir();
+		seed.packagePath = QLatin1String("/nonexistent/pkg.tar.xz");
+		seed.packageSize = 4096;
+		seed.packageSha256 = QString(64, QLatin1Char('a'));
+		seed.fromVersion = QLatin1String("0.7.2");
+		seed.toVersion = QLatin1String("0.7.3");
+		Transaction dead(&m_fs, &journal);
+		QVERIFY(dead.begin(seed, QLatin1String("dead")));
+		QVERIFY2(dead.backup(backup), qPrintable(dead.lastError()));
+		/* killed here: the installation is at `backup`, nothing at `installDir` */
+	}
+	QVERIFY2(!QDir(installDir).exists(), "the fixture did not move the installation aside");
+	QVERIFY(QFile::exists(backup + QLatin1Char('/') + exeName()));
+
+	Recovery recovery(&m_fs, &journal);
+	recovery.setNow(QDateTime::currentDateTimeUtc().addSecs(Recovery::LIVE_WINDOW_SECONDS + 60));
+	const QList<Recovery::Outcome> out = recovery.run();
+
+	QCOMPARE(out.size(), 1);
+	QVERIFY2(out.at(0).disposition == Recovery::RolledBack, qPrintable(out.at(0).note));
+
+	QFile restored(installDir + QLatin1Char('/') + exeName());
+	QVERIFY2(restored.open(QIODevice::ReadOnly), "the installation was not put back");
+	QCOMPARE(restored.readAll(), QByteArray("the old build"));
+	QVERIFY2(!QDir(backup).exists(), "the backup directory was left behind after the restore");
+	QVERIFY(journal.findUnfinished().isEmpty());
 }
 
 QTEST_GUILESS_MAIN(TestCrossVolumeInstall)

@@ -6,6 +6,7 @@
 #include "ProcessControl.h"
 #include "StartupHandshake.h"
 #include "Installer.h"
+#include "TransactionJournal.h"
 #include "UpdatePaths.h"
 #include "FileSystem.h"
 
@@ -62,6 +63,12 @@ public:
 		RefusedTarget,
 		/** PE-bear was still running when the wait ran out. Nothing was touched. */
 		RefusedParentStillRunning,
+		/**
+		 * The journal holds an unfinished record for this installation that
+		 * could not be recovered first: touched too recently to be sure it is
+		 * abandoned, or needing a person. Nothing was touched.
+		 */
+		RefusedUpdateInProgress,
 		/** Something failed and the previous installation was restored. */
 		RolledBack,
 		/** Something failed and the restore did not finish. Needs a person. */
@@ -116,6 +123,13 @@ public:
 	/** Overridden in tests only. */
 	void setNow(const QDateTime &now) { m_now = now; }
 
+	/**
+	 * Personal folders that must never be an installation (see
+	 * InstallationDetector::protectedDirectories). Defaults to the platform's
+	 * own answer; settable so a test can declare any path to be a Desktop.
+	 */
+	void setProtectedDirectories(const QStringList &dirs) { m_protected = dirs; m_protectedSet = true; }
+
 protected:
 	/**
 	 * SHA-256 of @p path, streamed.
@@ -130,6 +144,12 @@ protected:
 private:
 	Result refuse(Result r, const QString &why);
 	void note(const QString &what);
+
+	/**
+	 * Step 4: whatever an earlier run left unfinished, before this one opens
+	 * anything. Needs the journal, so it also prepares it.
+	 */
+	Result recoverEarlierRuns(const QString &canonicalTarget, TransactionJournal *journal);
 
 	/** Steps 1 and 2: the instruction itself. */
 	Result checkRequest(const HelperHandoff &handoff);
@@ -152,6 +172,8 @@ private:
 	Limits m_limits;
 
 	QDateTime m_now;
+	QStringList m_protected;
+	bool m_protectedSet;
 	QStringList m_journal;
 	QString m_lastError;
 	QString m_transactionId;
