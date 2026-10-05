@@ -51,7 +51,10 @@ namespace {
 		if (archive_entry_symlink(e) != NULL) return ArchiveEntry::KindSymlink;
 		if (archive_entry_hardlink(e) != NULL) return ArchiveEntry::KindHardlink;
 
-		const mode_t type = archive_entry_filetype(e);
+		/* Not mode_t: that is POSIX and absent on MSVC. libarchive returns its
+		   own __LA_MODE_T here, which differs per platform, so the type is
+		   taken from the call rather than named. */
+		const auto type = archive_entry_filetype(e);
 		if (type == AE_IFREG) return ArchiveEntry::KindFile;
 		if (type == AE_IFDIR) return ArchiveEntry::KindDir;
 		if (type == AE_IFLNK) return ArchiveEntry::KindSymlink;
@@ -200,7 +203,10 @@ QByteArray LibArchiveReader::readEntry(const QString &path)
 		buffer.resize(int(READ_BLOCK));
 		qint64 total = 0;
 		while (true) {
-			const ssize_t got = archive_read_data(a, buffer.data(), READ_BLOCK);
+			/* la_ssize_t on modern libarchive, and not ssize_t, which MSVC
+			   does not provide. Taken from the call for the same reason as
+			   the file type above. */
+			const auto got = archive_read_data(a, buffer.data(), READ_BLOCK);
 			if (got == 0) break;
 			if (got < 0) {
 				archive_read_free(a);
