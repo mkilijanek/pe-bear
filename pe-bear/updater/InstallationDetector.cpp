@@ -20,7 +20,14 @@ namespace {
 	{
 		if (path.isEmpty()) return QString();
 		QString p = QDir::cleanPath(QDir(path).absolutePath());
-		if (p.length() > 1 && p.endsWith(QLatin1Char('/'))) {
+		/* Trailing slash dropped -- except on a drive root. "C:/" chopped to
+		   "C:" is not the same place: a bare drive letter means that drive's
+		   *current directory* to Qt, so the root of C: quietly became wherever
+		   the process happened to be. On POSIX "/" has length 1 and was never
+		   chopped, which is why this only ever showed under MSVC. */
+		const bool driveRoot = (p.length() == 3 && p.at(1) == QLatin1Char(':')
+			&& p.endsWith(QLatin1Char('/')));
+		if (p.length() > 1 && p.endsWith(QLatin1Char('/')) && !driveRoot) {
 			p.chop(1);
 		}
 		return p;
