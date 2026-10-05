@@ -25,6 +25,10 @@ private slots:
 	void intervalIsClampedToSaneValues();
 	void survivesARoundTripThroughQSettings();
 	void ignoresACorruptStoredVersion();
+	void repositoryIsEmptyByDefaultAndFallsBackToTheBuild();
+	void repositoryAcceptsOnlyPlausibleGitHubNames_data();
+	void repositoryAcceptsOnlyPlausibleGitHubNames();
+	void repositorySurvivesARoundTripAndACorruptValueIsDropped();
 };
 
 void TestUpdateSettings::initTestCase()
@@ -142,6 +146,81 @@ void TestUpdateSettings::ignoresACorruptStoredVersion()
 	UpdateSettings s;
 	s.read(settings);
 	QVERIFY2(s.skippedVersion().isEmpty(), "a corrupt stored version was trusted");
+}
+
+void TestUpdateSettings::repositoryIsEmptyByDefaultAndFallsBackToTheBuild()
+{
+	UpdateSettings s;
+	QVERIFY(s.repository().isEmpty());
+	QCOMPARE(s.effectiveRepository(QLatin1String("hasherezade/pe-bear")), QString("hasherezade/pe-bear"));
+	QVERIFY(s.setRepository(QLatin1String("  mkilijanek/pe-bear ")));
+	QCOMPARE(s.repository(), QString("mkilijanek/pe-bear"));
+	QCOMPARE(s.effectiveRepository(QLatin1String("hasherezade/pe-bear")), QString("mkilijanek/pe-bear"));
+	/* Empty clears, and the build's default is back. */
+	QVERIFY(s.setRepository(QString()));
+	QVERIFY(s.repository().isEmpty());
+	QCOMPARE(s.effectiveRepository(QLatin1String("hasherezade/pe-bear")), QString("hasherezade/pe-bear"));
+}
+
+void TestUpdateSettings::repositoryAcceptsOnlyPlausibleGitHubNames_data()
+{
+	QTest::addColumn<QString>("input");
+	QTest::addColumn<bool>("accepted");
+
+	QTest::newRow("upstream") << "hasherezade/pe-bear" << true;
+	QTest::newRow("fork") << "mkilijanek/pe-bear" << true;
+	QTest::newRow("dots and underscores in the name") << "owner/my.repo_v2" << true;
+	QTest::newRow("hyphen in the owner") << "my-org/repo" << true;
+	QTest::newRow("no slash") << "hasherezade" << false;
+	QTest::newRow("empty owner") << "/pe-bear" << false;
+	QTest::newRow("empty name") << "hasherezade/" << false;
+	QTest::newRow("second slash") << "hasherezade/pe-bear/releases" << false;
+	QTest::newRow("dot-dot name") << "owner/.." << false;
+	QTest::newRow("dot name") << "owner/." << false;
+	QTest::newRow("query string") << "owner/repo?x=1" << false;
+	QTest::newRow("at sign") << "owner/repo@main" << false;
+	QTest::newRow("space") << "owner/pe bear" << false;
+	QTest::newRow("url") << "https://github.com/owner/repo" << false;
+	QTest::newRow("underscore in the owner") << "my_org/repo" << false;
+	QTest::newRow("owner starting with a hyphen") << "-org/repo" << false;
+	QTest::newRow("owner too long") << QString(40, QLatin1Char('a')) + "/repo" << false;
+	QTest::newRow("non-ascii") << QString::fromUtf8("wła\u015bciciel/repo") << false;
+}
+
+void TestUpdateSettings::repositoryAcceptsOnlyPlausibleGitHubNames()
+{
+	QFETCH(QString, input);
+	QFETCH(bool, accepted);
+	QCOMPARE(UpdateSettings::isValidRepository(input), accepted);
+
+	UpdateSettings s;
+	QVERIFY(s.setRepository(QLatin1String("hasherezade/pe-bear")));
+	QCOMPARE(s.setRepository(input), accepted);
+	/* A refused value leaves the previous one in place. */
+	QCOMPARE(s.repository(), accepted ? input : QString("hasherezade/pe-bear"));
+}
+
+void TestUpdateSettings::repositorySurvivesARoundTripAndACorruptValueIsDropped()
+{
+	UpdateSettings written;
+	QVERIFY(written.setRepository(QLatin1String("mkilijanek/pe-bear")));
+	QSettings settings;
+	written.write(settings);
+	settings.sync();
+
+	UpdateSettings read;
+	read.read(settings);
+	QCOMPARE(read.repository(), QString("mkilijanek/pe-bear"));
+
+	/* Edited by hand into something that is not a repository: dropped,
+	   so the build's default is used, rather than trusted. */
+	settings.beginGroup(QLatin1String(UpdateSettings::SETTINGS_GROUP));
+	settings.setValue(QLatin1String("Repository"), QLatin1String("evil.example/x/../../y"));
+	settings.endGroup();
+	settings.sync();
+	UpdateSettings again;
+	again.read(settings);
+	QVERIFY(again.repository().isEmpty());
 }
 
 QTEST_MAIN(TestUpdateSettings)

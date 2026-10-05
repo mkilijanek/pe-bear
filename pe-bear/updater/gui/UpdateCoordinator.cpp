@@ -17,9 +17,10 @@ const int UpdateCoordinator::AUTO_CHECK_DELAY_MS;
 UpdateCoordinator::UpdateCoordinator(UpdateSettings *settings,
 	IUnsavedWorkProbe *probe, QWidget *parentWindow)
 	: QObject(parentWindow), m_settings(settings), m_probe(probe),
-	m_parentWindow(parentWindow), m_manager(NULL), m_dialog(NULL), m_started(false)
+	m_parentWindow(parentWindow), m_manager(NULL), m_client(NULL), m_dialog(NULL), m_started(false)
 {
-	m_manager = new UpdateManager(new ReleaseClient(), new DownloadManager(), m_settings, this);
+	m_client = new ReleaseClient();
+	m_manager = new UpdateManager(m_client, new DownloadManager(), m_settings, this);
 
 	const InstallationInfo installation = InstallationDetector::detect();
 	m_manager->setInstallation(installation);
@@ -67,7 +68,17 @@ void UpdateCoordinator::onApplicationReady()
 void UpdateCoordinator::onAutoCheckTimeout()
 {
 	if (!m_manager) return;
+	applyRepository();
 	m_manager->checkForUpdatesIfDue();
+}
+
+void UpdateCoordinator::applyRepository()
+{
+	/* Read at every check rather than once: the user may have changed it
+	   in the Configure window since, and the setting is theirs to change. */
+	if (!m_client || !m_settings) return;
+	m_client->setRepository(m_settings->effectiveRepository(
+		QLatin1String(ReleaseClient::DEFAULT_REPOSITORY)));
 }
 
 void UpdateCoordinator::recoverInterruptedUpdates()
@@ -136,6 +147,7 @@ void UpdateCoordinator::onInstallStarted()
 void UpdateCoordinator::checkManually()
 {
 	if (!m_manager) return;
+	applyRepository();
 	m_dialog->present();
 	/* A manual check ignores both the 24 h interval and a skipped version. */
 	m_manager->checkForUpdates(true);

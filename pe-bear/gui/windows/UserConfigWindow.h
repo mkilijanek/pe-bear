@@ -61,6 +61,8 @@ private:
 	QCheckBox autoCheckUpdatesCBox;
 	QCheckBox autoDownloadUpdatesCBox;
 	QLabel updatesNote;
+	QLabel updateRepositoryLabel;
+	QLineEdit updateRepositoryEdit;
 #endif
 
 	MainSettings *settings;

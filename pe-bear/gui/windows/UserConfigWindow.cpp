@@ -1,4 +1,7 @@
 #include "UserConfigWindow.h"
+#ifdef PEBEAR_WITH_UPDATER
+	#include "../../updater/ReleaseClient.h"
+#endif
 #include <bearparser/Util.h>
 #include <QtGlobal>
 
@@ -65,11 +68,19 @@ UserConfigWindow::UserConfigWindow(QWidget *parent)
 	autoDownloadUpdatesCBox.setToolTip(tr("Only downloads. Installing always asks first."));
 	updatesNote.setText(tr("An update is never installed without your confirmation."));
 	updatesNote.setWordWrap(true);
+	updateRepositoryLabel.setText(tr("Release source (GitHub repository):"));
+	updateRepositoryEdit.setPlaceholderText(QLatin1String(pe_bear::updater::ReleaseClient::DEFAULT_REPOSITORY));
+	updateRepositoryEdit.setToolTip(tr("owner/name on GitHub. Leave empty for the default: %1")
+		.arg(QLatin1String(pe_bear::updater::ReleaseClient::DEFAULT_REPOSITORY)));
 
 	QVBoxLayout *updatesLayout = new QVBoxLayout();
 	updatesLayout->addWidget(&autoCheckUpdatesCBox);
 	updatesLayout->addWidget(&autoDownloadUpdatesCBox);
 	updatesLayout->addWidget(&updatesNote);
+	QHBoxLayout *repositoryLayout = new QHBoxLayout();
+	repositoryLayout->addWidget(&updateRepositoryLabel);
+	repositoryLayout->addWidget(&updateRepositoryEdit);
+	updatesLayout->addLayout(repositoryLayout);
 	updatesGroup.setLayout(updatesLayout);
 #endif
 
@@ -170,6 +181,7 @@ void UserConfigWindow::refreshSettingsView()
 #ifdef PEBEAR_WITH_UPDATER
 	autoCheckUpdatesCBox.setChecked(settings->updateSettings().isAutoCheckEnabled());
 	autoDownloadUpdatesCBox.setChecked(settings->updateSettings().isAutoDownloadEnabled());
+	updateRepositoryEdit.setText(settings->updateSettings().repository());
 #endif
 }
 
@@ -191,6 +203,13 @@ void UserConfigWindow::onOkClicked()
 #ifdef PEBEAR_WITH_UPDATER
 	this->settings->updateSettings().setAutoCheckEnabled(autoCheckUpdatesCBox.isChecked());
 	this->settings->updateSettings().setAutoDownloadEnabled(autoDownloadUpdatesCBox.isChecked());
+	if (!this->settings->updateSettings().setRepository(updateRepositoryEdit.text())) {
+		/* Kept as it was: a source that cannot be asked is worse than the one in use. */
+		QMessageBox::warning(this, tr("Release source"),
+			tr("\"%1\" is not a GitHub repository name (owner/name). The previous setting was kept.")
+				.arg(updateRepositoryEdit.text().trimmed()));
+		updateRepositoryEdit.setText(this->settings->updateSettings().repository());
+	}
 #endif
 	this->settings->writePersistent();
 	this->hide();

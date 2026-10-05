@@ -2,6 +2,7 @@
 
 #include "../../QtCompat.h"
 #include "../UpdateManager.h"
+#include "../ReleaseClient.h"
 #include "UpdateDialog.h"
 
 /**
@@ -74,10 +75,12 @@ private slots:
 	void onStateChanged(int state);
 
 private:
+	void applyRepository();
 	pe_bear::updater::UpdateSettings *m_settings;
 	IUnsavedWorkProbe *m_probe;
 	QWidget *m_parentWindow;
 	pe_bear::updater::UpdateManager *m_manager;
+	pe_bear::updater::ReleaseClient *m_client;
 	UpdateDialog *m_dialog;
 	bool m_started;
 };

@@ -116,6 +116,14 @@ asset, fetched over a fully validated TLS connection. **This is not a publisher
 signature.** It proves the bytes match what the API says, which means trusting
 GitHub's metadata. A signed manifest is a v2 item.
 
+The repository that metadata is read for is therefore the trust anchor, and it
+is configurable: the build names one (`PEBEAR_UPDATE_REPOSITORY`) and the user
+may name another in the settings. That is deliberate and adds no privilege:
+whoever can write the settings file can already write a portable installation
+in the same profile, and a portable installation is the only kind this updater
+replaces. Everything else -- TLS, the host allowlist, the digest, the helper's
+own checks -- applies to the chosen repository exactly as to the default.
+
 TLS errors are fatal and never ignored. Redirects are followed only to an
 explicit host allowlist. Every process boundary re-validates: the installer
 helper recomputes the digest itself rather than trusting this result.
@@ -184,6 +192,7 @@ is enforced by the `tst_no_widgets_dependency` test, not merely documented.
 | `PEBEAR_BUILD_RUNTIME` | *(empty)* | toolchain tag, e.g. `vs17`; inferred from `_MSC_VER` when unset |
 | `PEBEAR_MIN_OS_VERSION` | *(empty)* | lowest OS version this build supports |
 | `PEBEAR_FORK_PATCH` | `0` | the fork's number on top of the release: `3` makes this build `0.7.2-p003` |
+| `PEBEAR_UPDATE_REPOSITORY` | *(empty)* | GitHub repository whose releases are offered, `owner/name`; empty means `hasherezade/pe-bear` |
 
 The fork numbers its own builds on top of the upstream release: `0.7.2-p001`,
 `0.7.2-p002`, ... They sort after the release they are built on and before
@@ -216,6 +225,11 @@ Stored in the `Updates` group of PE-bear's existing `QSettings`.
 | `CheckIntervalHours` | `24` | minimum gap between automatic checks |
 | `LastCheck` | *(unset)* | ISO-8601 timestamp of the last check |
 | `SkippedVersion` | *(unset)* | version the user asked not to be reminded about |
+| `Repository` | *(unset)* | GitHub repository to take releases from, `owner/name`; unset means the build's `PEBEAR_UPDATE_REPOSITORY` |
+
+`Repository` is editable in the Configure window. Anything that is not a
+plausible `owner/name` is refused there and dropped when read back, so a bad
+value falls back to the build's default rather than to a request for nothing.
 
 Installing is not a setting. It is an explicit action, confirmed every time, and
 the user is told first if unsaved analysis would be lost.

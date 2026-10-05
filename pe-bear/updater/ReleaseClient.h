@@ -44,7 +44,11 @@ class ReleaseClient : public IReleaseSource
 	Q_OBJECT
 
 public:
-	/** Repository whose releases are offered, as "owner/name". */
+	/**
+	 * Repository whose releases are offered, as "owner/name": the build's
+	 * PEBEAR_UPDATE_REPOSITORY, or upstream when the build did not say.
+	 * The user may point at another one (UpdateSettings::repository()).
+	 */
 	static const char* DEFAULT_REPOSITORY;
 
 	static const qint64 MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
@@ -91,6 +95,12 @@ public:
 	virtual bool isBusy() const { return m_reply != NULL; }
 
 	QString repository() const { return m_repository; }
+	/**
+	 * Takes effect from the next request. Anything that is not a plausible
+	 * "owner/name" is refused and the current repository kept, so a bad
+	 * setting degrades to the default rather than to a request for nothing.
+	 */
+	bool setRepository(const QString &repository);
 
 private slots:
 	void onReadyRead();

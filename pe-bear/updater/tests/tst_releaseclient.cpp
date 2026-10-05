@@ -6,6 +6,7 @@
  */
 #include <QtTest>
 #include "../ReleaseClient.h"
+#include "../UpdateSettings.h"
 
 using namespace pe_bear::updater;
 
@@ -66,6 +67,8 @@ private slots:
 
 	void requestCarriesNothingIdentifying();
 	void apiUrlPointsAtTheConfiguredRepository();
+	void repositoryCanBeChangedButOnlyToAPlausibleOne();
+	void defaultRepositoryIsTheBuildsOrUpstream();
 	void limitsAreSetToTheDocumentedValues();
 };
 
@@ -294,6 +297,31 @@ void TestReleaseClient::apiUrlPointsAtTheConfiguredRepository()
 	QCOMPARE(url.toString(),
 		QString("https://api.github.com/repos/hasherezade/pe-bear/releases/latest"));
 	QVERIFY(ReleaseClient::isAllowedHost(url, ReleaseClient::allowedApiHosts()));
+}
+
+void TestReleaseClient::repositoryCanBeChangedButOnlyToAPlausibleOne()
+{
+	ReleaseClient client;
+	QCOMPARE(client.repository(), QString::fromLatin1(ReleaseClient::DEFAULT_REPOSITORY));
+	QVERIFY(client.setRepository(QLatin1String("mkilijanek/pe-bear")));
+	QCOMPARE(client.repository(), QString("mkilijanek/pe-bear"));
+	QCOMPARE(ReleaseClient::latestReleaseUrl(client.repository()).toString(),
+		QString("https://api.github.com/repos/mkilijanek/pe-bear/releases/latest"));
+	/* Refused, and the previous one kept: nothing here may turn a check
+	   into a request for an address the allowlist would never have seen. */
+	QVERIFY(!client.setRepository(QLatin1String("mkilijanek/pe-bear/../../x")));
+	QVERIFY(!client.setRepository(QString()));
+	QCOMPARE(client.repository(), QString("mkilijanek/pe-bear"));
+}
+
+void TestReleaseClient::defaultRepositoryIsTheBuildsOrUpstream()
+{
+#ifdef PEBEAR_UPDATE_REPOSITORY
+	QCOMPARE(QString::fromLatin1(ReleaseClient::DEFAULT_REPOSITORY), QString::fromLatin1(PEBEAR_UPDATE_REPOSITORY));
+#else
+	QCOMPARE(QString::fromLatin1(ReleaseClient::DEFAULT_REPOSITORY), QString("hasherezade/pe-bear"));
+#endif
+	QVERIFY(UpdateSettings::isValidRepository(QString::fromLatin1(ReleaseClient::DEFAULT_REPOSITORY)));
 }
 
 void TestReleaseClient::limitsAreSetToTheDocumentedValues()
