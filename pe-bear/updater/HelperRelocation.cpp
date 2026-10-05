@@ -165,5 +165,13 @@ QStringList HelperRelocation::loadedModules()
 #elif defined(Q_OS_UNIX)
 	dl_iterate_phdr(collectModule, &out);
 #endif
-	return out;
+	/* Only what is a file on disk. macOS reports system frameworks by the
+	   path they would have, while the bytes live in the dyld shared cache
+	   and the path does not exist; nothing like that can be inside an
+	   installation directory, and nothing like that could be copied. */
+	QStringList files;
+	for (int i = 0; i < out.size(); i++) {
+		if (QFileInfo(out.at(i)).isFile()) files << out.at(i);
+	}
+	return files;
 }

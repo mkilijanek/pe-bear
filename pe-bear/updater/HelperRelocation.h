@@ -76,9 +76,10 @@ public:
 	static int sweep(IFileSystem *fs, const QString &helperRoot, const QString &keepRunId);
 
 	/**
-	 * The modules mapped into this process, as canonical paths with forward
-	 * slashes; the executable itself is included. Platform-specific, and the
-	 * only part of this class that looks at the running process.
+	 * The modules mapped into this process that exist as files, as paths with
+	 * forward slashes; the executable itself is included where the platform
+	 * reports it. Platform-specific, and the only part of this class that
+	 * looks at the running process.
 	 */
 	static QStringList loadedModules();
 
