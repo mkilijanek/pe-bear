@@ -5,8 +5,11 @@ using namespace pe_bear::updater;
 
 QString pe_bear::updater::parentDirectoryOf(const QString &path)
 {
-	/* No fromNativeSeparators: see the header. Converting would be a no-op on
-	   POSIX and so would make this answer differ by host. */
+	/* Refused before cleanPath touches it: cleanPath normalises separators on
+	   Windows but not on POSIX, so letting a native path through is what made
+	   this answer differ by host. See the header. */
+	if (path.contains(QLatin1Char('\\'))) return QString();
+
 	const QString clean = QDir::cleanPath(path);
 	const int slash = clean.lastIndexOf(QLatin1Char('/'));
 

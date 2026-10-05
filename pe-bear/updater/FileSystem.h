@@ -31,11 +31,22 @@ namespace updater {
  *
  * Requires '/' separators, which is what every Qt path API -- and so
  * IFileSystem::canonicalPath -- returns on every platform, Windows included.
- * Native backslash paths are *not* converted, deliberately: the conversion is
- * a no-op on POSIX, so accepting them would make the same input give different
- * answers on different hosts, which is the exact fault this function exists to
- * remove. A path with no '/' in it therefore has no parent, everywhere, and
+ * A path containing a backslash is **refused outright**, on every host, and
  * the result is empty.
+ *
+ * That refusal is the only way to make this uniform, and it took two attempts
+ * to see why. QDir::fromNativeSeparators is a no-op on POSIX, so converting
+ * would give two answers. But QDir::cleanPath *also* normalises separators on
+ * Windows and not on POSIX, so merely declining to convert gives two answers
+ * as well -- "C:\\Tools\\pe-bear" yielded "C:/Tools" under MSVC and "" under
+ * gcc. Refusing is uniform, and it fails in the safe direction: the caller
+ * asks whether the result is a writable directory, an empty string is not, and
+ * the step is refused rather than applied to the wrong place.
+ *
+ * It costs nothing in practice. Every path reaching this function has already
+ * been through IFileSystem::canonicalPath, which returns '/' separators even
+ * on Windows, so a backslash here means the input never came from where it
+ * was supposed to.
  *
  * Returns an empty string whenever there is no parent to name.
  *

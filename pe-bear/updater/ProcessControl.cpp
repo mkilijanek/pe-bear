@@ -189,7 +189,20 @@ bool RealProcessLauncher::startDetached(const QString &exe, const QStringList &a
 {
 	/* The static overload rather than the member one: it is present in every
 	   Qt version this project builds against, and detaching is the whole
-	   point -- the started process has to outlive this one. */
+	   point -- the started process has to outlive this one.
+	
+	   What it does not do is redirect the new process's output, so the
+	   relaunched application inherits this process's stdout and stderr. That
+	   has a consequence for whoever starts the *helper*: if the helper is
+	   given a pipe, the relaunched application inherits it and keeps it open,
+	   so a reader waiting for end-of-file waits until the user closes the
+	   application -- and if the reader has already gone, the application gets
+	   SIGPIPE on its first write. Observed while testing this path: a shell
+	   pipeline reading the helper's output blocked for exactly that reason.
+	
+	   So PE-bear must start the helper with its output discarded rather than
+	   piped. Noted here because the mistake is invisible from the calling
+	   side and the symptom looks like the helper hanging. */
 	if (!QProcess::startDetached(exe, args, workingDir)) {
 		m_lastError = QLatin1String("could not start ") + QDir::toNativeSeparators(exe);
 		return false;

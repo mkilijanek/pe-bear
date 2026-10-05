@@ -270,3 +270,26 @@ Wartość testu jest w drugim scenariuszu, i on jest realistyczny: ktoś widzi b
 test to łapie - sprawdzone, komunikat nazywa plik i znalezione klasy. To jedyna rzecz, która
 w tym helperze absolutnie nie może istnieć: zdolność do wyświetlenia okienka, a tym bardziej
 pytania o uprawnienia administratora.
+
+2026-10-05 czwarte uzupełnienie, po pełnym buildzie MSVC z vcpkg na hoście testowym (543/543,
+pe-bear-updater.exe powstał pierwszy raz gdziekolwiek, libarchive 3.8.9 przez łańcuch vcpkg).
+tst_updatepaths padł tam na przypadku, który sam dopisałem godzinę wcześniej - i padł, bo moja
+dokumentacja funkcji była nieprawdziwa.
+
+parentDirectoryOf miało wymagać separatorów '/' i nie konwertować ścieżek natywnych. Usunięcie
+QDir::fromNativeSeparators nie wystarczyło: QDir::cleanPath TEŻ normalizuje separatory na
+Windows, a na POSIX nie. Więc "C:\Tools\pe-bear" dawało "C:/Tools" pod MSVC i "" pod gcc -
+dokładnie ta sama wada, którą ta funkcja miała usunąć, tylko o jedno API dalej. Dwa podejścia,
+dwa razy ten sam błąd klasy "założyłem, że API jest neutralne".
+
+Rozwiązanie: ścieżka zawierająca backslash jest ODRZUCANA wprost, na każdym hoście, przed
+cleanPath. Kontrakt jest wtedy jednolity i myli się w bezpieczną stronę - wołający pyta, czy
+wynik jest zapisywalnym katalogiem, pusty łańcuch nim nie jest, więc krok zostaje odmówiony, a
+nie wykonany na złym katalogu. W produkcji nie kosztuje nic: każda ścieżka docierająca do tej
+funkcji przeszła wcześniej przez IFileSystem::canonicalPath, które zwraca '/' także na Windows,
+więc backslash tutaj znaczy, że wejście nie przyszło stamtąd, skąd miało.
+
+Przy okazji z pełnego buildu: pe-bear-updater.exe odmawia poprawnie pod Windows (brak
+argumentów -> 10, --handoff C:\Windows\win.ini -> 10 z komunikatem o katalogu updatera),
+tst_libarchivereader WYKONAŁ się (nie pominięty), a tst_no_widgets_dependency jest pominięty,
+bo nie ma tam nm - stąd 28 celów wobec 29 na Linuksie.
