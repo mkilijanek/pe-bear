@@ -22,12 +22,15 @@ namespace {
 
 	struct Spec
 	{
-		Spec(const QString &p, const QByteArray &b, mode_t t = AE_IFREG, const QString &link = QString())
+		Spec(const QString &p, const QByteArray &b, unsigned int t = AE_IFREG, const QString &link = QString())
 			: path(p), body(b), type(t), linkTarget(link) {}
 
 		QString path;
 		QByteArray body;
-		mode_t type;
+		/* unsigned int, not mode_t: the latter is POSIX and MSVC has none.
+		   archive_entry_set_filetype takes unsigned int, so this is the
+		   portable spelling rather than a workaround. */
+		unsigned int type;
 		QString linkTarget;
 	};
 
