@@ -1,8 +1,8 @@
 #include "HelperHandoff.h"
+#include "Random.h"
 
 #include <QJsonDocument>
 #include <QJsonObject>
-#include <QRandomGenerator>
 #include <QUrl>
 
 namespace pe_bear {
@@ -45,13 +45,7 @@ QString HelperHandoff::fileName()
 
 QString HelperHandoff::generateRunId()
 {
-	QString id;
-	id.reserve(RUN_ID_HEX_LENGTH);
-	while (id.length() < RUN_ID_HEX_LENGTH) {
-		id += QString::number(QRandomGenerator::global()->generate(), 16)
-			.rightJustified(8, QLatin1Char('0'));
-	}
-	return id.left(RUN_ID_HEX_LENGTH);
+	return randomHex(RUN_ID_HEX_LENGTH);
 }
 
 bool HelperHandoff::isValid() const

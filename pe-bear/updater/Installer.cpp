@@ -62,23 +62,25 @@ Installer::Outcome Installer::prepareAndActivate(const VerifiedUpdate &update)
 		return RefusedUntouched;
 	}
 
-	/* Created through IFileSystem, not UpdatePaths::prepare(): that helper
+	/* The first filesystem change of the whole run, and it happens only now --
+	   after canInstall has agreed the installation may be touched. Everything
+	   above this line is a decision; nothing above it writes.
+	
+	   Created through IFileSystem, not UpdatePaths::prepare(): that helper
 	   predates the interface and talks to QDir directly, so calling it here
 	   would route the installer around the very abstraction the design rests
 	   on -- and would be untestable without touching the real filesystem. */
-	const QString needed[] = { m_paths.stagingDir(), m_paths.backupsDir() };
-	for (int i = 0; i < 2; i++) {
-		if (needed[i].isEmpty()) {
-			refuse(QLatin1String("the update directory layout is incomplete"));
-			return RefusedUntouched;
-		}
-		if (!m_fs->makeDir(needed[i])) {
-			refuse(QLatin1String("could not prepare ") + needed[i]
-				+ QLatin1String(": ") + m_fs->lastError());
-			return RefusedUntouched;
-		}
-		m_fs->restrictToOwner(needed[i]);
+	const QString stagingRoot = m_paths.stagingDir();
+	if (stagingRoot.isEmpty()) {
+		refuse(QLatin1String("the update directory layout is incomplete"));
+		return RefusedUntouched;
 	}
+	if (!m_fs->makeDir(stagingRoot)) {
+		refuse(QLatin1String("could not prepare ") + stagingRoot
+			+ QLatin1String(": ") + m_fs->lastError());
+		return RefusedUntouched;
+	}
+	m_fs->restrictToOwner(stagingRoot);
 
 	/* 2. A record exists before the first change. */
 	TransactionRecord seed;
@@ -90,10 +92,28 @@ Installer::Outcome Installer::prepareAndActivate(const VerifiedUpdate &update)
 	seed.toVersion = update.candidate.release.version.toString();
 
 	const QString txId = QUuid::createUuid().toString(QUuid::WithoutBraces);
-	const QString stagingDir = QDir::cleanPath(m_paths.stagingDir()
-		+ QDir::separator() + txId);
-	const QString backupDir = QDir::cleanPath(m_paths.backupsDir()
-		+ QDir::separator() + txId);
+	const QString stagingDir = QDir::cleanPath(stagingRoot + QDir::separator() + txId);
+
+	/* The backup goes beside the installation, not into the updater's private
+	   directory under the user's data location.
+	
+	   Moving the installation aside is a rename, and a rename cannot cross a
+	   filesystem. An installation on any volume other than the one holding the
+	   user's data directory would therefore have failed to back up, and every
+	   such update would have ended in a rollback -- the staging path already
+	   carried a copy fallback for exactly this reason, and the backup path did
+	   not. Beside the target it is the same volume by construction, so the
+	   move stays atomic and no copy of the old build is ever made.
+	
+	   The parent is known writable: canInstall required it above. */
+	const QString targetParent = parentDirectoryOf(m_targetDir);
+	if (targetParent.isEmpty()) {
+		refuse(QLatin1String("cannot determine where to keep the backup of ")
+			+ QDir::toNativeSeparators(m_targetDir));
+		return RefusedUntouched;
+	}
+	const QString backupDir = QDir::cleanPath(targetParent + QDir::separator()
+		+ QLatin1String(".PE-bear-backup-") + txId);
 	seed.stagingDir = stagingDir;
 
 	if (!m_tx.begin(seed, txId)) {

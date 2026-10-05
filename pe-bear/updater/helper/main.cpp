@@ -80,6 +80,13 @@ namespace {
 
 		if (fs.writeFile(path, lines.join(QLatin1String("\n")).toUtf8() + '\n')) {
 			fs.restrictToOwner(path);
+		} else {
+			/* Said out loud, because the conditions that stop this file being
+			   written -- a full disk, a read-only location -- are the same ones
+			   that make an update fail, and this file is then the only account
+			   of it a person has. Failing silently there leaves them nothing. */
+			complain(QLatin1String("could not write the update log to ")
+				+ QDir::toNativeSeparators(path) + QLatin1String(": ") + fs.lastError());
 		}
 	}
 
