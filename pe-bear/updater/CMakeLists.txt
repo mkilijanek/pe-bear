@@ -32,6 +32,7 @@ set (update_core_srcs
 	HelperHandoff.cpp
 	ProcessControl.cpp
 	UpdateHelper.cpp
+	Random.cpp
 )
 
 set (update_core_hdrs
@@ -61,6 +62,7 @@ set (update_core_hdrs
 	HelperHandoff.h
 	ProcessControl.h
 	UpdateHelper.h
+	Random.h
 )
 
 add_library(pebear_update_core STATIC ${update_core_srcs} ${update_core_hdrs})

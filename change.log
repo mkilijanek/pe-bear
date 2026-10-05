@@ -295,3 +295,65 @@ tst_libarchivereader WYKONAŁ się (nie pominięty), a tst_no_widgets_dependency
 bo nie ma tam nm - stąd 28 celów wobec 29 na Linuksie.
 
 2026-10-05T13:02:47Z starting an optional Windows deployment step so a build can assemble a runnable PE-bear directory - needed because testing an update requires the layout the application runs from, not the one cmake --install produces
+2026-10-05T12:00:00Z starting the #26 review follow-up: filing the tracker issue for the nine review findings (five POSIX-verifiable fixes now, two folded into the Windows validation pass) because the merge landed them on main
+
+2026-10-05T12:25:56Z starting batch A of the #27 review of #26: seven defects in code I wrote, all natively verifiable - cross-volume backup with no fallback, mkpath before validation, staging left after a copy activation, doubled handshake budget, silent log-write failure, a duplicated test block and a duplicated nonce generator
+
+2026-10-05 partia A z review #27 (defekty wprowadzone przez #26) - siedem napraw, wszystkie
+w kodzie, który sam napisałem.
+
+A1. Backup szedł przez rename do backupsDir() pod katalogiem danych użytkownika, a rename nie
+przechodzi między systemami plików. Instalacja na innej wolumenie niż katalog danych nie dała
+się zaktualizować NIGDY - każda próba kończyła się rollbackiem. Staging miał fallback
+kopiowania dokładnie z tego powodu, backup nie miał, i ta asymetria była niewidoczna dla
+wszystkich testów, bo FakeFileSystem::movePath nigdy nie zawodzi. Backup trafia teraz obok
+celu: ta sama wolumena z konstrukcji, więc rename zostaje atomowy i żadna kopia starego builda
+nie powstaje. Rodzic jest znany jako zapisywalny, bo canInstall tego wymaga.
+
+A2. preferredStagingRoot robiło mkpath. Biegnie przed walidacją - i także przy samym starcie
+PE-beara z updaterem - więc stare, zepsute albo wręcz odmówione polecenie zostawiało katalog
+.PE-bear-staging obok dowolnej ścieżki, którą nazwało. Jedyna zmiana w systemie plików przed
+fazą udokumentowaną jako "nic nie zmienia", i to poza prywatnym katalogiem updatera. Udowodnione
+prawdziwym przebiegiem: RefusedTarget (kod 13), leftUntouched() == true, a katalog powstał.
+Funkcja tylko nazywa ścieżkę; tworzy ją Installer, po canInstall. Dwa testy, które zakładały
+tworzenie, kodyfikowały ten defekt - przepisane.
+
+A3. commit() usuwał tylko backup. Po aktywacji przez kopiowanie - czyli dokładnie wtedy, gdy
+staging i cel są na różnych systemach plików - całe nieskompresowane drzewo builda zostawało na
+zawsze. Teraz commit sprząta też stagingDir, a staging root gdy jest pusty; porażka sprzątania
+jest zapisywana w rekordzie i nie wywraca commitu, bo instalacja jest już poprawna.
+
+A4. runAndWait dawało pełne timeoutMs na waitForStarted i pełne znowu na waitForFinished, więc
+120 s z Limits stawało się 240. Jeden budżet, podzielony: mały stały wycinek na start (ćwiartka,
+cap 10 s), reszta przez odjęcie od deadline'u.
+
+A5. writeLog ignorował wynik zapisu. Pełny dysk i katalog tylko do czytania to dokładnie te
+stany, w których update failuje, a ten plik jest wtedy jedynym świadectwem, jakie człowiek ma.
+Teraz complain() na stderr z powodem - zademonstrowane prawdziwym przebiegiem.
+
+A6. Dwa identyczne bloki asercji UNC w tst_updatepaths - moje podwójne wklejenie. Jeden usunięty.
+
+A7. Dwa generatory nonce'a, napisane tak samo w odstępie minut (StartupHandshake i
+HelperHandoff). Jeden randomHex() w Random.{h,cpp} - i przy okazji naprawiona rzecz, na którą
+issue tylko wskazuje: QRandomGenerator::global() jest po bezpiecznym zasianiu zwykłym
+deterministycznym PRNG, więc kto zna jego stan, przewidzi wyjście. Nonce handshake'u jest tym,
+co czyni podrobioną odpowiedź "wystartowałem" bezużyteczną, więc idzie teraz z
+QRandomGenerator::system(), czyli z CSPRNG systemu. Jedno miejsce, w którym ta decyzja może
+się utrzymać.
+
+Weryfikacja: 31 z 31 celów lokalnie. Nowy tst_crossvolumeinstall uruchamia prawdziwy Installer
+na RealFileSystem przez PRAWDZIWĄ granicę systemów plików (/dev/shm tmpfs wobec /tmp xfs,
+wykrywane a nie zakładane; QSKIP gdy host ma tylko jedną wolumenę). Nowy tst_processcontrol to
+pierwsze testy prawdziwej sondy procesów i launchera.
+
+Dwie rzeczy o moich własnych testach, warte zapisania, bo pierwsze wersje były bezwartościowe:
+- Test A3 przechodził z cofniętą poprawką, bo przy aktywacji przez rename staging i tak znika -
+  sprawdzał warunek spełniony samoistnie. Przepisany tak, by wymuszał ścieżkę kopiowania.
+- Test czasowy A4 NIE łapie podwojenia budżetu i jest to w nim napisane wprost. Podwojenie
+  wymaga procesu wolno STARTUJĄCEGO, a na POSIX nic takiego nie ma: waitForStarted kończy się
+  po exec. Zabezpieczeniem jest czysta arytmetyka startBudgetMs (ta mutację łapie) plus
+  odjęcie od deadline'u. Warunek, który czyni to obserwowalnym - pierwszy start walczący z
+  antywirusem - należy do walidacji na Windows.
+
+Partia B z #27 (helper instalowany do podmienianego katalogu; rollback nie usunie builda, który
+przekroczył handshake i żyje) wymaga prawdziwego Windows i wchodzi do walidacji #5/#20.

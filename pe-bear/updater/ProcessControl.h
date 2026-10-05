@@ -157,6 +157,14 @@ private:
 class RealProcessLauncher : public IProcessLauncher
 {
 public:
+	/**
+	 * Share of @p totalMs allowed for the process to start, the rest being
+	 * left for it to finish. Exposed so the arithmetic can be checked without
+	 * starting anything; the contract is that the two together never exceed
+	 * the caller's budget.
+	 */
+	static int startBudgetMs(int totalMs);
+
 	virtual Result runAndWait(const QString &exe, const QStringList &args,
 		const QString &workingDir, int timeoutMs);
 	virtual bool startDetached(const QString &exe, const QStringList &args,
