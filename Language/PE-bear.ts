@@ -1977,6 +1977,16 @@
         <source>Dumping sections failed!</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <location filename="../pe-bear/gui/windows/MainWindow.cpp" line="352"/>
+        <source>Check for &amp;Updates...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/gui/windows/MainWindow.cpp" line="428"/>
+        <source>&amp;Help</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>MenuHeader</name>
@@ -3270,6 +3280,36 @@
         <source>The changes will be applied on application restart</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <location filename="../pe-bear/gui/windows/UserConfigWindow.cpp" line="61"/>
+        <source>Updates</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/gui/windows/UserConfigWindow.cpp" line="62"/>
+        <source>Check for new versions automatically</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/gui/windows/UserConfigWindow.cpp" line="63"/>
+        <source>Checks at most once a day, in the background.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/gui/windows/UserConfigWindow.cpp" line="64"/>
+        <source>Download updates automatically</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/gui/windows/UserConfigWindow.cpp" line="65"/>
+        <source>Only downloads. Installing always asks first.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/gui/windows/UserConfigWindow.cpp" line="66"/>
+        <source>An update is never installed without your confirmation.</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>WrapperTableModel</name>
@@ -3281,6 +3321,437 @@
     <message>
         <location filename="../pe-bear/pe-bear/pe-bear/gui_base/WrapperTableModel.cpp" line="72"/>
         <source> entries</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>UpdateCoordinator</name>
+    <message>
+        <location filename="../pe-bear/updater/gui/UpdateCoordinator.cpp" line="79"/>
+        <source>PE-bear will close and restart to finish the update.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message numerus="yes">
+        <location filename="../pe-bear/updater/gui/UpdateCoordinator.cpp" line="82"/>
+        <source>%n loaded file(s) have unsaved changes. They will be lost.</source>
+        <translation type="unfinished">
+            <numerusform></numerusform>
+        </translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/updater/gui/UpdateCoordinator.cpp" line="84"/>
+        <source>Continue?</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/updater/gui/UpdateCoordinator.cpp" line="87"/>
+        <source>Install the update</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>UpdateDialog</name>
+    <message>
+        <location filename="../pe-bear/updater/gui/UpdateDialog.cpp" line="9"/>
+        <location filename="../pe-bear/updater/gui/UpdateDialog.cpp" line="160"/>
+        <source>Updates</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/updater/gui/UpdateDialog.cpp" line="29"/>
+        <source>Download</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/updater/gui/UpdateDialog.cpp" line="30"/>
+        <source>Install and Restart</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/updater/gui/UpdateDialog.cpp" line="31"/>
+        <source>Cancel</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/updater/gui/UpdateDialog.cpp" line="32"/>
+        <location filename="../pe-bear/updater/gui/UpdateDialog.cpp" line="156"/>
+        <source>Later</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/updater/gui/UpdateDialog.cpp" line="33"/>
+        <location filename="../pe-bear/updater/gui/UpdateDialog.cpp" line="242"/>
+        <source>Skip this version</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/updater/gui/UpdateDialog.cpp" line="108"/>
+        <source>Verifying</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/updater/gui/UpdateDialog.cpp" line="108"/>
+        <source>Downloading</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/updater/gui/UpdateDialog.cpp" line="130"/>
+        <location filename="../pe-bear/updater/gui/UpdateDialog.cpp" line="134"/>
+        <source>Installed version: </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/updater/gui/UpdateDialog.cpp" line="135"/>
+        <source>Available version: </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/updater/gui/UpdateDialog.cpp" line="137"/>
+        <source>Package: </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/updater/gui/UpdateDialog.cpp" line="141"/>
+        <source>Release notes</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/updater/gui/UpdateDialog.cpp" line="156"/>
+        <source>Hide</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/updater/gui/UpdateDialog.cpp" line="164"/>
+        <source>Checking for updates...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/updater/gui/UpdateDialog.cpp" line="168"/>
+        <source>PE-bear is up to date.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/updater/gui/UpdateDialog.cpp" line="172"/>
+        <location filename="../pe-bear/updater/gui/UpdateDialog.cpp" line="196"/>
+        <source>A new version of PE-bear is available.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/updater/gui/UpdateDialog.cpp" line="173"/>
+        <source>Nothing is downloaded until you choose to.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/updater/gui/UpdateDialog.cpp" line="175"/>
+        <source>Download size: </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/updater/gui/UpdateDialog.cpp" line="178"/>
+        <source>Downloading the update...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/updater/gui/UpdateDialog.cpp" line="181"/>
+        <source>Verifying the download...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/updater/gui/UpdateDialog.cpp" line="184"/>
+        <source>The update is ready to install.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/updater/gui/UpdateDialog.cpp" line="185"/>
+        <source>SHA-256 verified against the release metadata.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/updater/gui/UpdateDialog.cpp" line="187"/>
+        <source>Unsaved changes are never discarded: you will be asked first.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/updater/gui/UpdateDialog.cpp" line="190"/>
+        <source>A new version exists, but not for this build.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/updater/gui/UpdateDialog.cpp" line="193"/>
+        <source>You can download it manually from the project page.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/updater/gui/UpdateDialog.cpp" line="200"/>
+        <source>Update it the same way you installed it.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/updater/gui/UpdateDialog.cpp" line="203"/>
+        <source>The update could not be completed.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/updater/gui/UpdateDialog.cpp" line="243"/>
+        <source>PE-bear will stop offering this version.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/updater/gui/UpdateDialog.cpp" line="244"/>
+        <source>You will still be told about later ones.</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>Updater</name>
+    <message>
+        <location filename="../pe-bear/updater/ExtractionPolicy.cpp" line="53"/>
+        <source>an entry</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/updater/ExtractionPolicy.cpp" line="60"/>
+        <source>The package contains an entry with no name.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/updater/ExtractionPolicy.cpp" line="65"/>
+        <source>The package tries to write %1 outside the installation directory.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/updater/ExtractionPolicy.cpp" line="70"/>
+        <source>The package contains %1, which is not a usable file name on this system.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/updater/ExtractionPolicy.cpp" line="74"/>
+        <source>The path of %1 is too long.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/updater/ExtractionPolicy.cpp" line="76"/>
+        <source>The package contains %1, which is neither a file nor a directory.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/updater/ExtractionPolicy.cpp" line="79"/>
+        <source>The package contains a link, %1, which is not installed.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/updater/ExtractionPolicy.cpp" line="82"/>
+        <source>The package lists %1 more than once.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/updater/ExtractionPolicy.cpp" line="84"/>
+        <source>The package contains two entries differing only in letter case, including %1.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/updater/ExtractionPolicy.cpp" line="87"/>
+        <source>%1 is larger than expected for a package entry.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/updater/ExtractionPolicy.cpp" line="89"/>
+        <source>The package expands to more than the permitted size.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/updater/ExtractionPolicy.cpp" line="91"/>
+        <source>The package contains more entries than permitted.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/updater/ExtractionPolicy.cpp" line="93"/>
+        <source>%1 expands far more than its stored size, which is characteristic of a decompression bomb.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/updater/ExtractionPolicy.cpp" line="96"/>
+        <source>The package was refused.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/updater/StartupHandshake.cpp" line="41"/>
+        <source>The updated PE-bear did not confirm that it started.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/updater/StartupHandshake.cpp" line="44"/>
+        <source>The updated PE-bear left an unreadable startup report.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/updater/StartupHandshake.cpp" line="47"/>
+        <source>The startup report belongs to a different update attempt.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/updater/StartupHandshake.cpp" line="50"/>
+        <source>The installed PE-bear reports a different version than the update contained.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/updater/StartupHandshake.cpp" line="53"/>
+        <source>The updated PE-bear started but reported that it had not initialised correctly.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/updater/StartupHandshake.cpp" line="56"/>
+        <source>The update could not be confirmed.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/updater/UpdateHelper.cpp" line="78"/>
+        <source>The update was installed.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/updater/UpdateHelper.cpp" line="81"/>
+        <source>The update instructions were not usable. Nothing was changed.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/updater/UpdateHelper.cpp" line="84"/>
+        <source>The update instructions were too old to act on. Nothing was changed.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/updater/UpdateHelper.cpp" line="87"/>
+        <source>The update package did not match what was expected, so it was not installed. Nothing was changed.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/updater/UpdateHelper.cpp" line="90"/>
+        <source>This installation cannot be updated automatically. Nothing was changed.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/updater/UpdateHelper.cpp" line="93"/>
+        <source>PE-bear was still running, so the update was not applied. Nothing was changed.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/updater/UpdateHelper.cpp" line="96"/>
+        <source>The update failed and the previous version was restored.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/updater/UpdateHelper.cpp" line="99"/>
+        <source>The update failed and could not be fully undone. Please reinstall PE-bear.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/updater/UpdateHelper.cpp" line="102"/>
+        <source>The updater stopped because of an internal error.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/updater/UpdateTypes.cpp" line="56"/>
+        <source>Could not reach the update server.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/updater/UpdateTypes.cpp" line="58"/>
+        <source>The update server did not respond in time.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/updater/UpdateTypes.cpp" line="60"/>
+        <source>The update server is rate-limiting requests. Try again later.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/updater/UpdateTypes.cpp" line="62"/>
+        <source>The secure connection to the update server could not be established.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/updater/UpdateTypes.cpp" line="64"/>
+        <source>The update server redirected to an unexpected host.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/updater/UpdateTypes.cpp" line="66"/>
+        <source>The update server returned an unexpected response.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/updater/UpdateTypes.cpp" line="68"/>
+        <source>The response from the update server was too large.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/updater/UpdateTypes.cpp" line="70"/>
+        <source>No stable release was found.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/updater/UpdateTypes.cpp" line="72"/>
+        <source>The release version could not be interpreted.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/updater/UpdateTypes.cpp" line="74"/>
+        <source>The release does not publish a SHA-256 digest, so it cannot be verified.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/updater/UpdateTypes.cpp" line="76"/>
+        <source>The published SHA-256 digest is malformed.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/updater/UpdateTypes.cpp" line="78"/>
+        <source>The new release has no package matching this build.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/updater/UpdateTypes.cpp" line="80"/>
+        <source>Several packages of the new release match this build, so none was chosen.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/updater/UpdateTypes.cpp" line="82"/>
+        <source>This copy of PE-bear is managed by the system, so it will not be replaced.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/updater/UpdateTypes.cpp" line="84"/>
+        <source>The download did not complete.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/updater/UpdateTypes.cpp" line="86"/>
+        <source>The downloaded package has an unexpected size.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/updater/UpdateTypes.cpp" line="88"/>
+        <source>The downloaded package failed SHA-256 verification and was deleted.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/updater/UpdateTypes.cpp" line="90"/>
+        <source>The update directory could not be prepared.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/updater/UpdateTypes.cpp" line="92"/>
+        <source>Cancelled.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/updater/UpdateTypes.cpp" line="94"/>
+        <source>Installation is not available in this build.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/updater/UpdateTypes.cpp" line="96"/>
+        <source>Unknown error.</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
