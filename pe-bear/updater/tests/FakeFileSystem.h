@@ -146,8 +146,10 @@ public:
 
 	virtual bool movePath(const QString &from, const QString &to)
 	{
-		if (shouldFail(QLatin1String("movePath"), from)
-			|| shouldFail(QLatin1String("movePath"), to)) return fail("movePath refused");
+		/* One check for the whole operation. Calling shouldFail twice would
+		   advance the call counter twice per move, making failOnCall(n) refer
+		   to something a test author cannot predict. */
+		if (shouldFail2(QLatin1String("movePath"), from, to)) return fail("movePath refused");
 
 		const QString f = clean(from);
 		const QString t = clean(to);
@@ -217,6 +219,20 @@ private:
 	}
 
 	bool fail(const char *why) const { m_lastError = QLatin1String(why); return false; }
+
+	/** Fails if either path matches, counting the operation once. */
+	bool shouldFail2(const QString &op, const QString &a, const QString &b) const
+	{
+		const int n = ++m_calls[op];
+		if (m_failAlways.contains(op)) return true;
+		if (m_failNth.value(op, -1) == n) return true;
+		if (m_failPath.contains(op)) {
+			foreach (const QString &p, m_failPath.values(op)) {
+				if (p == clean(a) || p == clean(b)) return true;
+			}
+		}
+		return false;
+	}
 
 	bool shouldFail(const QString &op, const QString &path) const
 	{

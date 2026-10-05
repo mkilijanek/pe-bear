@@ -110,6 +110,28 @@ bool Transaction::load(const QString &id)
 	return true;
 }
 
+bool Transaction::markStagingOps(const QList<TransactionOp> &stagingOps)
+{
+	if (m_record.state != TxPrepared) {
+		return refuse(QLatin1String("staging steps expect Prepared, not ")
+			+ transactionStateToString(m_record.state));
+	}
+	QList<TransactionOp>::const_iterator itr;
+	for (itr = stagingOps.begin(); itr != stagingOps.end(); ++itr) {
+		if (!itr->isValid()) return refuse(QLatin1String("a staging step is incomplete"));
+	}
+	const int before = m_record.ops.size();
+	for (itr = stagingOps.begin(); itr != stagingOps.end(); ++itr) {
+		m_record.ops.append(*itr);
+	}
+	if (!m_journal->write(m_record)) {
+		while (m_record.ops.size() > before) m_record.ops.removeLast();
+		return refuse(QLatin1String("could not record the staged files: ")
+			+ m_journal->lastError());
+	}
+	return true;
+}
+
 bool Transaction::backup(const QString &backupDir)
 {
 	if (m_record.state != TxPrepared) {

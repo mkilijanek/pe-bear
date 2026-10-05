@@ -57,6 +57,17 @@ public:
 	 */
 	bool begin(const TransactionRecord &seed, const QString &id = QString());
 
+	/**
+	 * Records files created while staging, staying in Prepared.
+	 *
+	 * The state does not advance because Prepared means the *installation* has
+	 * not been touched, and staging does not touch it. The steps are still
+	 * recorded, because the staging tree is real and has to be cleaned up on
+	 * any later failure -- which is why planRecovery treats Prepared with
+	 * recorded steps as needing a rollback rather than as nothing to do.
+	 */
+	bool markStagingOps(const QList<TransactionOp> &stagingOps);
+
 	/** Moves the current installation aside. Prepared -> BackedUp. */
 	bool backup(const QString &backupDir);
 

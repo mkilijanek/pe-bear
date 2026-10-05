@@ -26,6 +26,7 @@ set (update_core_srcs
 	ExtractionPolicy.cpp
 	PackageExtractor.cpp
 	LibArchiveReader.cpp
+	Installer.cpp
 )
 
 set (update_core_hdrs
@@ -48,6 +49,8 @@ set (update_core_hdrs
 	ExtractionPolicy.h
 	PackageExtractor.h
 	LibArchiveReader.h
+	Installer.h
+	PlatformInstaller.h
 )
 
 add_library(pebear_update_core STATIC ${update_core_srcs} ${update_core_hdrs})

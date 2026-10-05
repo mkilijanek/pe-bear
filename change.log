@@ -78,3 +78,20 @@ deskryptorów pakietu. CMake ostrzega wtedy wprost, a test raportuje skip, nie c
 
 CI: apt na Linuksie, brew na macOS (keg-only, prefix wskazany jawnie), vcpkg na Windows -
 preinstalowany na runnerach, ciągnie zlib/bzip2/lzma sam.
+2026-10-05T07:30:15Z starting the rest of #20: PlatformInstaller interface and the Installer orchestrator; the ordering and rollback logic is platform-independent and tested natively, the Windows activation step is behind the interface
+
+2026-10-05 PlatformInstaller + Installer dla #20: interfejs kroków platformowych i
+platform-niezależny orkiestrator. Kolejność: odmowa -> otwarcie transakcji -> staging ->
+sprawdzenie układu -> backup -> aktywacja -> oczekiwanie na handshake. Staging i sprawdzenie
+układu są PRZED backupem celowo: pakiet, który się nie rozpakuje albo nie jest PE-bearem, musi
+zostać wykryty, gdy działająca instalacja jeszcze stoi na miejscu.
+
+Trzy błędy wyłapane w trakcie, warte zapisania bo wszystkie dotyczyły narzędzi, nie kodu
+produkcyjnego:
+- Zakotwiczenia CMake wzięte z gałęzi #23, której na tej gałęzi nie ma - Installer.cpp i test
+  nie zostały dodane, a "core exit=0" znaczyło tylko, że rdzeń zbudował się bez nich.
+- Installer wołał UpdatePaths::prepare(), który powstał w M1 i używa QDir bezpośrednio - czyli
+  obchodził IFileSystem, na którym opiera się decyzja z #5. To była prawdziwa wada projektowa,
+  wyłapana przez testy natychmiast; katalogi tworzy teraz m_fs.
+- FakeFileSystem liczył wywołania per sprawdzenie, nie per operację, bo movePath wołał
+  shouldFail dwa razy. failOnCall(n) wskazywał wtedy na coś, czego autor testu nie przewidzi.
