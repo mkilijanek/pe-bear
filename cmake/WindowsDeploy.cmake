@@ -31,6 +31,8 @@ set(PEBEAR_DEPLOY_DIR "" CACHE PATH
 	"Assemble a runnable PE-bear directory here at the end of the build (Windows only)")
 option(PEBEAR_DEPLOY_CLEAN
 	"Empty PEBEAR_DEPLOY_DIR before filling it, so nothing stale survives" OFF)
+option(PEBEAR_DEPLOY_LEAN
+	"Leave out Qt's software OpenGL and Direct3D fallbacks (about 41 MB)" OFF)
 
 if(NOT PEBEAR_DEPLOY_DIR)
 	return()
@@ -71,6 +73,30 @@ if(NOT PEBEAR_WINDEPLOYQT)
 	message(FATAL_ERROR
 		"PEBEAR_DEPLOY_DIR is set but windeployqt was not found. It ships with Qt; "
 		"add its bin directory to PATH or set PEBEAR_WINDEPLOYQT explicitly.")
+endif()
+
+# ------------------------------------------------------- the C++ runtime
+#
+# windeployqt's --compiler-runtime does not copy the runtime: when it cannot
+# find the redistributable DLLs it drops vc_redist.x64.exe instead, a 25 MB
+# installer that makes the directory bigger without making it self-contained.
+# Measured on the test host -- msvcp140.dll and both vcruntime140 DLLs were
+# absent and the application started only because the host already had them.
+# On a clean machine it would not have.
+#
+# This module resolves the actual DLLs. _SKIP stops it adding install rules;
+# only the variable is wanted.
+set(CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS_SKIP ON)
+set(CMAKE_INSTALL_UCRT_LIBRARIES ON)
+include(InstallRequiredSystemLibraries)
+
+if(CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS)
+	list(LENGTH CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS _rt_count)
+	message(STATUS "deploy: ${_rt_count} C++ runtime DLL(s)")
+else()
+	message(WARNING
+		"deploy: the C++ runtime DLLs could not be located, so the deployment will "
+		"rely on them being installed on whatever machine runs it.")
 endif()
 
 # ---------------------------------------------------------------- vcpkg DLLs
@@ -134,16 +160,33 @@ endif()
 # the styles, the image formats and the compiler runtime with it. Then against
 # the helper, which needs only Qt Core and Network but must not be left
 # depending on the application's copies being found first.
+set(_windeployqt_flags "")
+if(PEBEAR_DEPLOY_LEAN)
+	# Measured rather than assumed: with these four files removed by hand, the
+	# deployed application still started and answered the startup handshake on
+	# the Windows test host. They are not the default because opengl32sw.dll is
+	# Qt's fallback when the desktop OpenGL path fails -- which happens on some
+	# virtual machines and remote sessions -- and a deployment that will not
+	# start is a worse outcome than one that is 41 MB larger.
+	list(APPEND _windeployqt_flags --no-opengl-sw --no-system-d3d-compiler)
+endif()
+
 list(APPEND _deploy_commands
-	COMMAND "${PEBEAR_WINDEPLOYQT}" --compiler-runtime
+	COMMAND "${PEBEAR_WINDEPLOYQT}" ${_windeployqt_flags}
 		--dir "${_deploy_dir}" "${_deploy_dir}/$<TARGET_FILE_NAME:${PROJECT_NAME}>"
 )
 if(TARGET pe-bear-updater)
 	list(APPEND _deploy_commands
-		COMMAND "${PEBEAR_WINDEPLOYQT}" --dir "${_deploy_dir}"
+		COMMAND "${PEBEAR_WINDEPLOYQT}" ${_windeployqt_flags} --dir "${_deploy_dir}"
 			"${_deploy_dir}/$<TARGET_FILE_NAME:pe-bear-updater>"
 	)
 endif()
+
+foreach(_rt ${CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS})
+	list(APPEND _deploy_commands
+		COMMAND ${CMAKE_COMMAND} -E copy_if_different "${_rt}" "${_deploy_dir}/"
+	)
+endforeach()
 
 foreach(_dll ${_runtime_dlls})
 	list(APPEND _deploy_commands
@@ -159,6 +202,14 @@ foreach(_qm ${_qm_files})
 			"${_qm}" "${_deploy_dir}/Language/${_locale}/PELanguage.qm"
 	)
 endforeach()
+
+# An earlier run with --compiler-runtime may have left the installer here.
+# Removed rather than ignored: 25 MB of something that does nothing in a
+# directory meant to be copied about.
+list(APPEND _deploy_commands
+	COMMAND ${CMAKE_COMMAND} -E rm -f "${_deploy_dir}/vc_redist.x64.exe"
+		"${_deploy_dir}/vc_redist.x86.exe"
+)
 
 add_custom_target(pebear_deploy ALL
 	${_deploy_commands}
