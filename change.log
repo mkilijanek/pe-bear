@@ -95,3 +95,21 @@ produkcyjnego:
   wyłapana przez testy natychmiast; katalogi tworzy teraz m_fs.
 - FakeFileSystem liczył wywołania per sprawdzenie, nie per operację, bo movePath wołał
   shouldFail dwa razy. failOnCall(n) wskazywał wtedy na coś, czego autor testu nie przewidzi.
+2026-10-05T08:03:26Z starting the startup-validation handshake for #20; protocol only, platform-independent and testable natively - the helper executable needs #23 and #24 on main first
+
+2026-10-05 StartupHandshake dla #20: protokół, którym nowo zainstalowany build dowodzi, że
+działa. Wymóg z #5 brzmi "sam czas działania procesu nie jest kryterium", więc nowy build musi
+powiedzieć coś konkretnego: jednorazowy token echo'owany z żądania, własna wersja i jawny
+status inicjalizacji. Helper akceptuje tylko dokładne dopasowanie tokenu z akceptowalnym
+statusem i zgodną wersją.
+
+Plik, nie gniazdo ani potok: te dwa procesy to ten sam program w dwóch wersjach, na trzech
+systemach, z których jednemu właśnie podmieniono pliki pod nogami. Named pipe albo local socket
+dokłada drugą domenę awarii - uprawnienia, nazewnictwo, czas życia - do kroku, którego całym
+zadaniem jest być godnym zaufania. Plik jest też tym, co człowiek odczyta później, chcąc
+wiedzieć, dlaczego aktualizacja się wycofała.
+
+Token jest tym, co czyni bezużyteczną odpowiedź z poprzedniej próby: bez niego zaległy plik z
+"wszystko w porządku" zwalidowałby instalację, która nigdy nie wystartowała. Sprawdzone mutacją
+- usunięcie kontroli tokenu wywala dokładnie ten test, a potraktowanie brakującego pola
+"started" jako true wywala swój.

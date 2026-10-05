@@ -23,6 +23,7 @@ set(updater_tests
 	tst_packageextractor
 	tst_libarchivereader
 	tst_installer
+	tst_startuphandshake
 )
 
 foreach(test_name ${updater_tests})
