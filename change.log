@@ -356,3 +356,46 @@ Dwie rzeczy o moich własnych testach, warte zapisania, bo pierwsze wersje były
 
 Partia B z #27 (helper instalowany do podmienianego katalogu; rollback nie usunie builda, który
 przekroczył handshake i żyje) wymaga prawdziwego Windows i wchodzi do walidacji #5/#20.
+
+2026-10-05 zgłoszenie: zmiana języka nie wpływa na tekst updatera w oknie Configure.
+
+Przyczyna: żaden z 91 łańcuchów updatera nie istniał w Language/*.ts. Kontekst
+UserConfigWindow JEST w plikach .qm (16 wpisów), więc reszta tego okna się tłumaczy - stąd
+obserwacja, że zmienia się wszystko poza sekcją aktualizacji. Po M1 i M2 nikt nie uruchomił
+lupdate, czyli te napisy nigdy nie dotarły do tłumaczy.
+
+Drugi defekt, naprawiony PRZED dodaniem do .ts: UpdateHelper::resultMessage używał QObject::tr
+dla swoich 9 komunikatów, podczas gdy pozostałe 50 łańcuchów rdzenia idzie przez
+QCoreApplication::translate("Updater", ...). QObject to kontekst-wysypisko. Kolejność ma
+znaczenie: zmiana kontekstu później osieraca to, co zostało przetłumaczone pod starym, więc
+koszt zapłaciłby pierwszy tłumacz.
+
+Czego NIE zrobiłem i dlaczego - przegenerowania .ts przez lupdate. Zmierzyłem to, zamiast
+założyć:
+- lupdate -no-obsolete USUWA tłumaczenia: 9 japońskich i 3 koreańskie przepadły w teście.
+- Bez tego flagu nic nie ginie (oznaczane jako vanished z zachowanym tekstem), ale lupdate z
+  Qt 6.8 na Windows zapisuje CRLF, co przepisuje każdą linię: 1268 wstawień i 694 usunięcia
+  w pliku, który miał zyskać 112 wpisów.
+- Poważniejsze: "Go to address" NADAL jest w kodzie (ContentPreview.cpp:113), a zostało
+  oznaczone jako vanished, bo lupdate przypisuje je do innego kontekstu - skutek braku
+  Q_OBJECT w DataDirTreeItem, OptionalHdrTreeItem i PEFileNTHdrTreeItem, o czym lupdate
+  ostrzega wprost. Czyli hurtowa regeneracja tasuje konteksty napisów upstreamu.
+
+Zamiast tego wstawione tekstowo dokładnie 91 wpisów updatera (Updater 50, UpdateDialog 29,
+UserConfigWindow 6, UpdateCoordinator 4, MainWindow 2 - "Check for &Updates..." i "&Help").
+Wynik: 1419 wstawień, ZERO usunięć w trzech plikach, 597 -> 688 wiadomości każdy. Weryfikacja
+nie polegała na oglądaniu diffu: test sprawdza, że usunięcie wstawionych bloków odtwarza plik
+bajt w bajt, że żaden istniejący wpis nie zniknął ani nie zmienił tłumaczenia i że XML jest
+poprawny. Przy pierwszym podejściu regex wymagał dosłownie "<message>" i pominął
+<message numerus="yes"> - formę mnogą ostrzeżenia o niezapisanych zmianach, czyli akurat ten
+komunikat, który ostrzega przed utratą pracy. Asercja na liczbę 91 to wyłapała.
+
+35 nowych łańcuchów upstreamu (HexTableView 9, PatternSearchWindow 7, DisasmTreeView 5,
+InfoTableModel 4, MainWindow 5, SecTreeItem 1) i 9 nieaktualnych wpisów zostawione nietknięte -
+to dryf tłumaczeń upstreamu, osobna sprawa.
+
+Plików .qm nie regenerowałem. lrelease pomija wpisy unfinished, więc nowe i tak by do nich nie
+weszły, a regeneracja na nieaktualnym .ts groziła wyrzuceniem tłumaczeń, które dziś działają.
+Objaw zniknie dopiero, gdy ktoś te napisy przetłumaczy - nie wymyślam tekstu interfejsu w
+językach, których nie potrafię sprawdzić. Pułapki -no-obsolete i CRLF opisane w
+Language/Readme.md.
