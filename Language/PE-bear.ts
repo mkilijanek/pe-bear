@@ -3310,6 +3310,26 @@
         <source>An update is never installed without your confirmation.</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <location filename="../pe-bear/gui/windows/UserConfigWindow.cpp" line="71"/>
+        <source>Release source (GitHub repository):</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/gui/windows/UserConfigWindow.cpp" line="73"/>
+        <source>owner/name on GitHub. Leave empty for the default: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/gui/windows/UserConfigWindow.cpp" line="210"/>
+        <source>Release source</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../pe-bear/gui/windows/UserConfigWindow.cpp" line="211"/>
+        <source>&quot;%1&quot; is not a GitHub repository name (owner/name). The previous setting was kept.</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>WrapperTableModel</name>

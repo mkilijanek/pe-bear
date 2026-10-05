@@ -143,6 +143,19 @@ if(PEBEAR_MIN_OS_VERSION)
 	target_compile_definitions(pebear_update_core PUBLIC
 		PEBEAR_MIN_OS_VERSION="${PEBEAR_MIN_OS_VERSION}")
 endif()
+
+# Where releases come from, as "owner/name" on GitHub. A fork sets its own so
+# that its builds offer its releases; the user may still override it in the
+# settings. Empty keeps upstream.
+set(PEBEAR_UPDATE_REPOSITORY "" CACHE STRING "GitHub repository whose releases are offered (owner/name); empty for hasherezade/pe-bear")
+if(PEBEAR_UPDATE_REPOSITORY)
+	if(NOT PEBEAR_UPDATE_REPOSITORY MATCHES "^[A-Za-z0-9-]+/[A-Za-z0-9._-]+$")
+		message(FATAL_ERROR "PEBEAR_UPDATE_REPOSITORY must be owner/name, got '${PEBEAR_UPDATE_REPOSITORY}'")
+	endif()
+	target_compile_definitions(pebear_update_core PUBLIC
+		PEBEAR_UPDATE_REPOSITORY="${PEBEAR_UPDATE_REPOSITORY}")
+	message(STATUS "updater: releases from ${PEBEAR_UPDATE_REPOSITORY}")
+endif()
 if(COMMIT_HASH)
 	target_compile_definitions(pebear_update_core PUBLIC
 		PEBEAR_BUILD_ID="${COMMIT_HASH}")

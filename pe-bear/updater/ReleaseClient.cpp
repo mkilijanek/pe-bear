@@ -1,9 +1,14 @@
 #include "ReleaseClient.h"
+#include "UpdateSettings.h"
 #include "Version.h"
 
 using namespace pe_bear::updater;
 
+#ifdef PEBEAR_UPDATE_REPOSITORY
+const char* ReleaseClient::DEFAULT_REPOSITORY = PEBEAR_UPDATE_REPOSITORY;
+#else
 const char* ReleaseClient::DEFAULT_REPOSITORY = "hasherezade/pe-bear";
+#endif
 
 /* Definitions for the in-class initialised constants above, needed wherever
    they are odr-used (for example by QCOMPARE, which takes a reference). */
@@ -252,6 +257,13 @@ ReleaseClient::ReleaseClient(const QString &repository, QObject *parent)
 ReleaseClient::~ReleaseClient()
 {
 	teardown();
+}
+
+bool ReleaseClient::setRepository(const QString &repository)
+{
+	if (!UpdateSettings::isValidRepository(repository)) return false;
+	m_repository = repository;
+	return true;
 }
 
 void ReleaseClient::fetchLatest()

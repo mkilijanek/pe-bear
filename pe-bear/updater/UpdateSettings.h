@@ -39,6 +39,27 @@ public:
 
 	/** Version the user asked not to be reminded about; empty when none. */
 	QString skippedVersion() const { return m_skippedVersion; }
+
+	/**
+	 * GitHub repository to take releases from, "owner/name"; empty means the
+	 * build's default. Whoever can write this file can point the updater at
+	 * their own releases -- which is no more than they could already do to a
+	 * portable installation they can write to, and the only kind this
+	 * updater replaces. Everything else (TLS, host allowlist, digest, the
+	 * helper's own checks) applies to that repository exactly as to the
+	 * default.
+	 */
+	QString repository() const { return m_repository; }
+	/** Refuses anything that is not a plausible "owner/name"; empty clears. */
+	bool setRepository(const QString &repository);
+	/** The one to use: the override, or @p buildDefault when none is set. */
+	QString effectiveRepository(const QString &buildDefault) const;
+	/**
+	 * "owner/name" as GitHub spells them: owner of letters, digits and
+	 * hyphens; name of letters, digits, hyphens, dots and underscores; no
+	 * dot-only names, no second slash, nothing a URL would re-interpret.
+	 */
+	static bool isValidRepository(const QString &repository);
 	void setSkippedVersion(const Version &version);
 	void clearSkippedVersion() { m_skippedVersion.clear(); }
 	bool isVersionSkipped(const Version &version) const;
@@ -59,6 +80,7 @@ private:
 	int m_checkIntervalHours;
 	QDateTime m_lastCheck;
 	QString m_skippedVersion;
+	QString m_repository;
 };
 
 }; // namespace updater
