@@ -22,14 +22,18 @@ namespace {
 }; // namespace
 
 Version::Version()
-	: m_valid(false)
+	: m_forkPatch(0), m_valid(false)
 {
 	for (int i = 0; i < ComponentCount; i++) m_parts[i] = 0;
 }
 
-Version::Version(int major, int minor, int micro, int patch)
-	: m_valid(true)
+Version::Version(int major, int minor, int micro, int patch, int forkPatch)
+	: m_forkPatch(forkPatch), m_valid(true)
 {
+	if (m_forkPatch < 0) {
+		m_valid = false;
+		m_forkPatch = 0;
+	}
 	m_parts[0] = major;
 	m_parts[1] = minor;
 	m_parts[2] = micro;
@@ -42,9 +46,26 @@ Version::Version(int major, int minor, int micro, int patch)
 	}
 }
 
+/* "-p001" and the like: the fork's suffix, which is not a prerelease. Returns
+   the number, or -1 when the text carries no such suffix or a malformed one;
+   `body` receives the text without it. */
+static int splitForkPatch(const QString &text, QString *body)
+{
+	*body = text;
+	const int dash = text.indexOf(QLatin1Char('-'));
+	if (dash < 0) return 0;
+	const QString suffix = text.mid(dash + 1);
+	if (suffix.length() < 2 || !suffix.startsWith(QLatin1Char('p'))) return -1;
+	const QString digits = suffix.mid(1);
+	if (!isAllDigits(digits) || digits.length() > Version::MaxComponentDigits) return -1;
+	*body = text.left(dash);
+	return digits.toInt();
+}
+
 bool Version::looksLikePrerelease(const QString &text)
 {
-	const QString t = text.trimmed();
+	QString t;
+	if (splitForkPatch(text.trimmed(), &t) < 0) return true;
 	/* SemVer prerelease ("-rc1") and build metadata ("+build") markers,
 	   plus the loose "0.7.2rc1" and "0.7.2 beta" spellings seen in the wild */
 	if (t.contains(QLatin1Char('-')) || t.contains(QLatin1Char('+'))
@@ -71,7 +92,9 @@ Version Version::fromString(const QString &text)
 	if (trimmed.isEmpty()) return Version();
 	if (looksLikePrerelease(trimmed)) return Version();
 
-	QString body = trimmed;
+	QString body;
+	const int forkPatch = splitForkPatch(trimmed, &body);
+	if (forkPatch < 0 || body.isEmpty()) return Version();
 	if (body.startsWith(QLatin1Char('v')) || body.startsWith(QLatin1Char('V'))) {
 		body.remove(0, 1);
 	}
@@ -92,13 +115,13 @@ Version Version::fromString(const QString &text)
 		if (!ok || v < 0) return Version();
 		values[i] = v;
 	}
-	return Version(values[0], values[1], values[2], values[3]);
+	return Version(values[0], values[1], values[2], values[3], forkPatch);
 }
 
 Version Version::current()
 {
 	return Version(REBEAR_MAJOR_VERSION, REBEAR_MINOR_VERSION,
-		REBEAR_MICRO_VERSION, REBEAR_PATCH_VERSION);
+		REBEAR_MICRO_VERSION, REBEAR_PATCH_VERSION, REBEAR_FORK_PATCH);
 }
 
 QString Version::toString() const
@@ -117,6 +140,10 @@ QString Version::toString() const
 		if (i) out += QLatin1Char('.');
 		out += QString::number(m_parts[i]);
 	}
+	if (m_forkPatch > 0) {
+		/* Three digits, as the fork numbers them: p001, p002, ... */
+		out += QLatin1String("-p") + QString::number(m_forkPatch).rightJustified(3, QLatin1Char('0'));
+	}
 	return out;
 }
 
@@ -126,5 +153,7 @@ int Version::compare(const Version &other) const
 		if (m_parts[i] < other.m_parts[i]) return -1;
 		if (m_parts[i] > other.m_parts[i]) return 1;
 	}
+	if (m_forkPatch < other.m_forkPatch) return -1;
+	if (m_forkPatch > other.m_forkPatch) return 1;
 	return 0;
 }
