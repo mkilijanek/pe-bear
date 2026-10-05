@@ -66,6 +66,8 @@ public:
 	QString downloadsDir() const;
 	QString stagingDir() const;
 	QString transactionsDir() const;
+	/** Where a helper started from inside the installation copies itself to, one subdirectory per run. */
+	QString helperDir() const;
 	QString logFilePath() const;
 
 	/** Creates and returns a fresh, randomly named directory under downloads. */
