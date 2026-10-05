@@ -12,6 +12,13 @@ BearVers::BearVers(QString replyString)
 	: vMajor(0), vMinor(0), vPatch(0), vSub(0), vDesc(""), valid(false)
 {
 	replyString = replyString.trimmed();
+	/* "0.7.2-p001": whatever follows the dash is the description, the way
+	   toString() renders it, so the two round-trip. */
+	const int dash = replyString.indexOf('-');
+	if (dash >= 0) {
+		this->vDesc = replyString.mid(dash + 1);
+		replyString.truncate(dash);
+	}
 	QStringList strings = replyString.split(".", QT_SkipEmptyParts);
 	if (strings.length() < 3) return;
 
