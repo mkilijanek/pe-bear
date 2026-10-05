@@ -1,4 +1,6 @@
 #include "UpdateHelper.h"
+
+#include <QCoreApplication>
 #include "PackageVerifier.h"
 #include "TransactionJournal.h"
 #include "InstallationDetector.h"
@@ -73,23 +75,32 @@ QString UpdateHelper::resultMessage(Result r)
 {
 	switch (r) {
 		case Succeeded:
-			return QObject::tr("The update was installed.");
+			return QCoreApplication::translate("Updater",
+				"The update was installed.");
 		case RefusedInvalidRequest:
-			return QObject::tr("The update instructions were not usable. Nothing was changed.");
+			return QCoreApplication::translate("Updater",
+				"The update instructions were not usable. Nothing was changed.");
 		case RefusedStaleRequest:
-			return QObject::tr("The update instructions were too old to act on. Nothing was changed.");
+			return QCoreApplication::translate("Updater",
+				"The update instructions were too old to act on. Nothing was changed.");
 		case RefusedPackageMismatch:
-			return QObject::tr("The update package did not match what was expected, so it was not installed. Nothing was changed.");
+			return QCoreApplication::translate("Updater",
+				"The update package did not match what was expected, so it was not installed. Nothing was changed.");
 		case RefusedTarget:
-			return QObject::tr("This installation cannot be updated automatically. Nothing was changed.");
+			return QCoreApplication::translate("Updater",
+				"This installation cannot be updated automatically. Nothing was changed.");
 		case RefusedParentStillRunning:
-			return QObject::tr("PE-bear was still running, so the update was not applied. Nothing was changed.");
+			return QCoreApplication::translate("Updater",
+				"PE-bear was still running, so the update was not applied. Nothing was changed.");
 		case RolledBack:
-			return QObject::tr("The update failed and the previous version was restored.");
+			return QCoreApplication::translate("Updater",
+				"The update failed and the previous version was restored.");
 		case NeedsAttention:
-			return QObject::tr("The update failed and could not be fully undone. Please reinstall PE-bear.");
+			return QCoreApplication::translate("Updater",
+				"The update failed and could not be fully undone. Please reinstall PE-bear.");
 		default:
-			return QObject::tr("The updater stopped because of an internal error.");
+			return QCoreApplication::translate("Updater",
+				"The updater stopped because of an internal error.");
 	}
 }
 
