@@ -22,6 +22,7 @@ set(updater_tests
 	tst_extractionpolicy
 	tst_packageextractor
 	tst_libarchivereader
+	tst_installer
 )
 
 foreach(test_name ${updater_tests})
