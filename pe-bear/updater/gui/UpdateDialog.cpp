@@ -186,6 +186,10 @@ void UpdateDialog::refresh()
 				+ QLatin1String("\n")
 				+ tr("Unsaved changes are never discarded: you will be asked first."));
 			break;
+		case StateInstalling:
+			m_headline.setText(tr("Installing the update."));
+			setStatus(tr("PE-bear will close now. The updater finishes the installation and starts the new version."));
+			break;
 		case StateNoCompatibleAsset:
 			m_headline.setText(tr("A new version exists, but not for this build."));
 			setStatus(updateErrorMessage(m_manager->lastError())

@@ -7,6 +7,8 @@
 #include "PackageVerifier.h"
 #include "InstallationDetector.h"
 #include "UpdatePaths.h"
+#include "FileSystem.h"
+#include "ProcessControl.h"
 #include "UpdateSettings.h"
 #include "AssetSelector.h"
 
@@ -48,6 +50,24 @@ public:
 	InstallationInfo installation() const { return m_installation; }
 
 	void setPaths(const UpdatePaths &paths) { m_paths = paths; }
+
+	/**
+	 * How the hand-off to pe-bear-updater reaches the outside world. Real
+	 * implementations by default; tests inject fakes so that requestInstall
+	 * can be driven without starting a process. Borrowed, not owned.
+	 */
+	void setFileSystem(IFileSystem *fs) { m_fs = fs; }
+	void setProcessLauncher(IProcessLauncher *launcher) { m_launcher = launcher; }
+	/** Where the helper is; defaults to defaultHelperPath(). */
+	void setHelperPath(const QString &path) { m_helperPath = path; }
+	QString helperPath() const { return m_helperPath; }
+
+	/**
+	 * The helper beside the application, which is where the install rules
+	 * and the Windows deployment both put it. One place to change if B1 in
+	 * #27 decides it belongs outside the directory being replaced.
+	 */
+	static QString defaultHelperPath();
 
 	/** Overrides the installable package types; used by tests. */
 	void setInstallablePackageTypes(const QSet<int> &types)
@@ -99,6 +119,12 @@ signals:
 	void progress(qint64 done, qint64 total);
 	void updateAvailable(const pe_bear::updater::UpdateCandidate &candidate);
 	void readyToInstall(const pe_bear::updater::VerifiedUpdate &verified);
+	/**
+	 * The helper is running and holds the instructions. Whoever owns the
+	 * window must now close the application -- the helper waits for exactly
+	 * that, and will refuse rather than force it.
+	 */
+	void installStarted();
 	void upToDate();
 	void errorOccurred(int error, const QString &detail);
 
@@ -137,6 +163,12 @@ private:
 	QString m_downloadDir;
 	bool m_userInitiated;
 	bool m_installConsentGiven;
+
+	RealFileSystem m_realFs;
+	RealProcessLauncher m_realLauncher;
+	IFileSystem *m_fs;
+	IProcessLauncher *m_launcher;
+	QString m_helperPath;
 };
 
 }; // namespace updater

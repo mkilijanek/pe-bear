@@ -12,6 +12,7 @@ QString pe_bear::updater::updateStateToString(UpdateState s)
 		case StateDownloading: return QLatin1String("Downloading");
 		case StateVerifying: return QLatin1String("Verifying");
 		case StateReadyToInstall: return QLatin1String("ReadyToInstall");
+		case StateInstalling: return QLatin1String("Installing");
 		case StateNoCompatibleAsset: return QLatin1String("NoCompatibleAsset");
 		case StateManagedInstallation: return QLatin1String("ManagedInstallation");
 		case StateFailed: return QLatin1String("Failed");
@@ -44,6 +45,9 @@ QString pe_bear::updater::updateErrorToString(UpdateError e)
 		case ErrorCancelled: return QLatin1String("Cancelled");
 		case ErrorInstallerUnavailable: return QLatin1String("InstallerUnavailable");
 		case ErrorProtectedLocation: return QLatin1String("ProtectedLocation");
+		case ErrorHelperMissing: return QLatin1String("HelperMissing");
+		case ErrorHandoffWriteFailed: return QLatin1String("HandoffWriteFailed");
+		case ErrorHelperStartFailed: return QLatin1String("HelperStartFailed");
 		default: return QLatin1String("Invalid");
 	}
 }
@@ -93,6 +97,15 @@ QString pe_bear::updater::updateErrorMessage(UpdateError e)
 			return QCoreApplication::translate("Updater", "Cancelled.");
 		case ErrorInstallerUnavailable:
 			return QCoreApplication::translate("Updater", "Installation is not available in this build.");
+		case ErrorHelperMissing:
+			return QCoreApplication::translate("Updater",
+				"The updater helper (pe-bear-updater) is not next to PE-bear, so the update cannot be installed from here.");
+		case ErrorHandoffWriteFailed:
+			return QCoreApplication::translate("Updater",
+				"The update instructions could not be written. Nothing was changed.");
+		case ErrorHelperStartFailed:
+			return QCoreApplication::translate("Updater",
+				"The updater helper could not be started. Nothing was changed.");
 		case ErrorProtectedLocation:
 			return QCoreApplication::translate("Updater",
 				"This copy of PE-bear sits directly in a personal folder, so it will not be replaced: an update would remove everything else kept there.");

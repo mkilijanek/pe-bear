@@ -6,6 +6,8 @@
 #include "../TransactionJournal.h"
 #include "../Recovery.h"
 #include "../UpdatePaths.h"
+#include "../HelperResult.h"
+#include "../UpdateHelper.h"
 #include "../../REbear.h"
 
 using namespace pe_bear::updater;
@@ -32,6 +34,7 @@ UpdateCoordinator::UpdateCoordinator(UpdateSettings *settings,
 	m_dialog = new UpdateDialog(m_manager, parentWindow);
 	connect(m_dialog, SIGNAL(installRequested()), this, SLOT(onInstallRequested()));
 	connect(m_manager, SIGNAL(stateChanged(int)), this, SLOT(onStateChanged(int)));
+	connect(m_manager, SIGNAL(installStarted()), this, SLOT(onInstallStarted()));
 }
 
 bool UpdateCoordinator::hasPendingInstall() const
@@ -51,6 +54,7 @@ void UpdateCoordinator::onApplicationReady()
 	   lands. Reached only on a real start, never from the handshake path,
 	   which returns before the window is shown. */
 	recoverInterruptedUpdates();
+	reportLastInstallResult();
 
 	if (!m_settings || !m_settings->isAutoCheckEnabled()) return;
 
@@ -87,6 +91,46 @@ void UpdateCoordinator::recoverInterruptedUpdates()
 	for (int i = 0; i < lines.size(); i++) {
 		qWarning("%s", qPrintable(lines.at(i)));
 	}
+}
+
+void UpdateCoordinator::reportLastInstallResult()
+{
+	RealFileSystem fs;
+	const UpdatePaths paths;
+	bool ok = false, unreadable = false;
+	const HelperResult r = HelperResult::consume(fs, paths, &ok, &unreadable);
+	if (unreadable) {
+		qWarning("updater: the last install result could not be read and was discarded");
+		return;
+	}
+	if (!ok) return;
+
+	qWarning("updater: last install %s (exit %d): %s", qPrintable(r.result), r.exitCode,
+		qPrintable(r.detail.isEmpty() ? r.message : r.detail));
+
+	/* The helper already chose the words; this only decides the tone, and
+	   adds the one sentence the user most wants after a failure. */
+	QString text = r.message;
+	if (r.result != QLatin1String("Succeeded") && r.leftUntouched) {
+		text += QLatin1String("\n\n") + tr("Your installation was not changed.");
+	}
+	if (r.result == QLatin1String("Succeeded")) {
+		QMessageBox::information(m_parentWindow, tr("PE-bear was updated"), text);
+	} else {
+		QMessageBox::warning(m_parentWindow, tr("The update did not complete"), text);
+	}
+}
+
+void UpdateCoordinator::onInstallStarted()
+{
+	/* The helper is running and waiting for this process to end -- bounded,
+	   and refusing rather than forcing it. Closing the main window is the
+	   right way out: closeEvent writes the settings and auto-saves the tags,
+	   and with quitOnLastWindowClosed the application ends. Nothing here asks
+	   again; the question was put, with the unsaved-work count, before the
+	   hand-off was written. */
+	if (m_dialog) m_dialog->hide();
+	if (m_parentWindow) m_parentWindow->close();
 }
 
 void UpdateCoordinator::checkManually()

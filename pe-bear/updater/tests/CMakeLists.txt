@@ -30,6 +30,7 @@ set(updater_tests
 	tst_crossvolumeinstall
 	tst_processcontrol
 	tst_recovery
+	tst_helperresult
 )
 
 foreach(test_name ${updater_tests})
