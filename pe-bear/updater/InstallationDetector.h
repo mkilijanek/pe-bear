@@ -12,7 +12,16 @@ enum InstallationKind {
 	/** Installed into a shared location: replaceable only if it is writable. */
 	InstallSystem,
 	/** Owned by a package manager or sandbox: never touched, only reported. */
-	InstallManaged
+	InstallManaged,
+	/**
+	 * Sitting directly in a personal folder -- Desktop, Documents, Downloads,
+	 * the home directory -- or at a filesystem root. Never replaced, because
+	 * the installer replaces the *directory*, and here the directory is full
+	 * of things that are not PE-bear. Unzipping a portable build straight
+	 * onto the Desktop is common, and an update that then emptied the Desktop
+	 * is the one outcome this whole design must never produce.
+	 */
+	InstallUserFolder
 };
 
 QString installationKindToString(InstallationKind k);
@@ -36,6 +45,7 @@ struct InstallationInfo
 	bool isUpdatable() const
 	{
 		if (kind == InstallManaged || kind == InstallUnknown) return false;
+		if (kind == InstallUserFolder) return false;
 		return writable;
 	}
 };
@@ -65,6 +75,24 @@ public:
 	 */
 	static InstallationInfo detectAt(const QString &appDirPath,
 		const QString &appFilePath, const QMap<QString, QString> &env);
+
+	/**
+	 * The same, with the personal folders given rather than looked up, so a
+	 * test can declare any directory to be somebody's Desktop. The three-
+	 * argument form passes protectedDirectories().
+	 */
+	static InstallationInfo detectAt(const QString &appDirPath,
+		const QString &appFilePath, const QMap<QString, QString> &env,
+		const QStringList &protectedDirs);
+
+	/**
+	 * Directories an installation must never *be*: Desktop, Documents,
+	 * Downloads, Pictures, Music, Movies and the home directory, as the
+	 * platform reports them, canonicalised. A subdirectory of one of these is
+	 * fine -- Desktop/pe-bear is a perfectly good place -- only the folder
+	 * itself is refused.
+	 */
+	static QStringList protectedDirectories();
 
 	static QMap<QString, QString> currentEnvironment();
 

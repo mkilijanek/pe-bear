@@ -194,7 +194,10 @@ void UpdateDialog::refresh()
 			break;
 		case StateManagedInstallation:
 			m_headline.setText(tr("A new version of PE-bear is available."));
-			setStatus(updateErrorMessage(ErrorManagedInstallation)
+			/* The manager chose the error; it knows whether this is a package
+			   manager's copy or one sitting on the Desktop, and the two must not
+			   be explained with the same sentence. */
+			setStatus(updateErrorMessage(m_manager->lastError())
 				+ QLatin1String("\n") + m_manager->installation().detail
 				+ QLatin1String("\n")
 				+ tr("Update it the same way you installed it."), true);

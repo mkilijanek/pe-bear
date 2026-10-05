@@ -72,6 +72,15 @@ bool DirectoryInstaller::canInstall(const InstallationInfo &installation, QStrin
 	   writable directory inside a read-only parent would pass every check and
 	   then fail at the one step that cannot be undone cheaply. */
 	const QString parent = parentDirectoryOf(installation.installDir);
+	/* A directory with no parent to speak of is a filesystem root, and this
+	   installer replaces whole directories. The detector refuses these too;
+	   this is the belt to its braces, because the two are reached by different
+	   callers and a root must be refused by whichever one asks. */
+	if (parent.isEmpty() || parent == installation.installDir) {
+		if (reason) *reason = QLatin1String("installation directory is a filesystem root: ")
+			+ QDir::toNativeSeparators(installation.installDir);
+		return false;
+	}
 	if (!m_fs->isWritableDir(parent)) {
 		if (reason) *reason = QLatin1String("parent directory is not writable: ")
 			+ QDir::toNativeSeparators(parent);

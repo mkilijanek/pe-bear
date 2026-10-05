@@ -47,6 +47,12 @@ public:
 	/** True while a verified package is waiting for the user's decision. */
 	bool hasPendingInstall() const;
 
+	/**
+	 * Acts on whatever the journal says an earlier update left unfinished.
+	 * Called from onApplicationReady; public so it can be driven directly.
+	 */
+	void recoverInterruptedUpdates();
+
 public slots:
 	/** Called once the main window is visible. Never blocks startup. */
 	void onApplicationReady();

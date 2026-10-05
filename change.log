@@ -443,3 +443,66 @@ ts-y ręcznie, per Language/Readme.md, wpisy pozostają unfinished zgodnie z dec
 local suite: 24/24 green on Qt 5.15 (PEBEAR_BUILD_UPDATER_TESTS=ON). Partia B (helper w bin,
 rollback vs działający build, los dziecka po timeoucie, 10 s start cap) zostaje na #27 do
 weryfikacji na Windows.
+
+2026-10-05T15:44:05Z starting #32 and #33: refuse personal folders and filesystem roots as an installation (the directory swap would destroy everything beside PE-bear), and actually run recovery - planRecovery and findUnfinished had no callers, so an interrupted update was never put back
+
+2026-10-05 #32 i #33, na gałęzi opartej o #31 (9920aca), bo recovery musi sprzątać korzeń
+stagingu, który #31 właśnie wprowadził do rekordu.
+
+#32 - katalogi osobiste. Instalator podmienia CAŁY katalog, więc PE-bear rozpakowany prosto na
+Pulpit znaczył: backup przenosi Pulpit na bok, aktywacja wstawia paczkę, commit usuwa backup.
+Nowy rodzaj InstallUserFolder w detektorze: Pulpit, Dokumenty, Pobrane, Obrazy, Muzyka, Filmy,
+katalog domowy (QStandardPaths, kanonicznie) oraz korzeń systemu plików (rodzic pusty lub
+równy sobie). Nigdy isUpdatable(). Podkatalog takiego folderu jest w porządku - Desktop/pe-bear
+to dobre miejsce - odmawiany jest wyłącznie sam folder. Lista jest wstrzykiwalna (czwarty
+argument detectAt), żeby test mógł ogłosić dowolny katalog czyimś Pulpitem. Helper idzie tą
+samą ścieżką przez checkTarget -> canInstall, a canInstall ma dodatkowo własną odmowę korzenia
+- pasek do szelek, bo dociera się do nich różnymi drogami. GUI: nowy ErrorProtectedLocation z
+osobnym komunikatem, bo "zarządzany przez system" byłby kłamstwem o kopii na Pulpicie; dialog
+bierze teraz błąd z managera zamiast zakładać ErrorManagedInstallation.
+
+#33 - recovery. planRecovery i Transaction::load istniały i były testowane; nikt ich nie wołał.
+Nowa klasa Recovery: czyta dziennik, dla każdego rekordu decyduje planem i działa - rollback,
+commit, albo zostawia. Dwa miejsca wywołania, z dwóch powodów: start helpera (zanim otworzy
+własną transakcję) i start PE-beara w onApplicationReady (po crashu helpera użytkownik
+uruchamia PE-beara, nie helpera). onApplicationReady jest z showEvent, więc instancja
+handshake'u - która wraca przed show() - nigdy tam nie trafia. To ważne: ona wycofałaby
+aktywację, którą ma potwierdzić.
+
+Reguła, która czyni to w ogóle bezpiecznym: rekord dotknięty w ciągu 15 minut jest zostawiany
+w spokoju, cokolwiek mówi. Każdy krok helpera przepisuje rekord (TransactionJournal::write
+stempluje updatedAt), więc młody rekord może należeć do helpera, który właśnie czeka na
+handshake - i wycofanie mu pracy spod nóg byłoby dokładnie tą szkodą, przed którą dziennik
+chroni. Nieczytelny stempel liczy się jako stary, nie młody: żywy helper zawsze pisze
+poprawny, a traktowanie go jako młodego blokowałoby tę instalację na zawsze bez niczego w
+zamian.
+
+Jeden przypadek, którego planer nie widzi: stary rekord Activated dla katalogu, z którego
+PE-bear WŁAŚNIE działa. To mocniejszy dowód działającego builda niż handshake; rollback
+przeniósłby działającą instalację na bok - Windows odmówi, POSIX, gorzej, pozwoli. Więc
+runningFrom == targetDir -> markValidated + commit, nie rollback. Helper nigdy nie podaje
+runningFrom, bo nie jest instalacją.
+
+Trzy błędy złapane przez testy przed commitem, wszystkie moje:
+- checkTarget biegło PRZED recovery. Po śmierci helpera między backupem a aktywacją katalog
+  instalacji nie istnieje, więc checkTarget odmawiało "not a directory", zanim recovery mogło
+  go przywrócić. Przestawione: recovery zaraz po checkRequest, na handoff.targetDir.
+- Recovery enumerowało przez findUnfinished(), które wyklucza TxFailed jako terminalny - a
+  Failed to dokładnie "rollback niepełny, potrzebny człowiek" i MUSI blokować nową próbę.
+  Teraz listIds() + read(), pomijane są tylko Committed i RolledBack.
+- Rekord Prepared bez kroków ma plan None i był pomijany - czyli helper, który zaczął sekundy
+  temu, był niewidoczny dla następnego. Młody blokuje; stary jest zamykany przez rollBack
+  (no-op), żeby nie wisiał jako praca w toku.
+
+Nowy wynik helpera RefusedUpdateInProgress (kod 15, leftUntouched() == true): rekord dla tej
+instalacji pozostawiony żywy, dla człowieka, albo nieodzyskany.
+
+22 nowe przypadki: tst_recovery 14 (nowy zestaw), detektor +3, instalator +2, helper +2,
+cross-volume +1 (przerwany backup przywrócony na PRAWDZIWYCH plikach). 32 z 32 celów. Cztery
+mutacje, każda złapana przez zamierzony test: usunięta odmowa katalogów osobistych, helper bez
+recovery, zignorowane okno 15 minut, rollback zamiast commitu dla działającego builda.
+
+Czego tu nie ma: e2e z zabiciem prawdziwego helpera między backupem a aktywacją. Prawdziwy
+PE-bear odpowiada na handshake zbyt szybko, żeby trafić SIGKILL w to okno bez instrumentacji.
+Przywrócenie na prawdziwych plikach jest pokryte przez tst_crossvolumeinstall, kolejność w
+helperze przez tst_updatehelper na atrapie.

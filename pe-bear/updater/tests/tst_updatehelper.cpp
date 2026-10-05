@@ -17,6 +17,9 @@
 #include "../UpdateHelper.h"
 #include "../DirectoryInstaller.h"
 #include "../StartupHandshake.h"
+#include "../Transaction.h"
+#include "../TransactionJournal.h"
+#include "../Recovery.h"
 #include "FakeFileSystem.h"
 
 using namespace pe_bear::updater;
@@ -247,6 +250,9 @@ private slots:
 	void waitsForPeBearToClose();
 	void proceedsWhenPeBearHasAlreadyGone();
 	void refusesWhenPeBearNeverCloses();
+
+	void recoversAnAbandonedUpdateBeforeStarting();
+	void refusesWhileAnEarlierUpdateMayStillBeRunning();
 
 	void rollsBackWhenTheNewBuildWillNotStart();
 	void rollsBackWhenTheNewBuildSaysNothing();
@@ -678,6 +684,95 @@ void TestUpdateHelper::refusesWhenPeBearNeverCloses()
 }
 
 //---------------------------------------------------------------- validation
+
+void TestUpdateHelper::recoversAnAbandonedUpdateBeforeStarting()
+{
+	/* A previous helper died after moving the installation aside. The next
+	   one must put it back before doing anything of its own -- and must then
+	   carry on and succeed, because the whole point of recovering first is
+	   that the second attempt starts from a sound installation. */
+	TransactionJournal journal(&m_fs, QLatin1String(ROOT) + QLatin1String("/transactions"));
+	QVERIFY(journal.prepare());
+	{
+		TransactionRecord seed;
+		seed.targetDir = QLatin1String(TARGET);
+		seed.stagingDir = QLatin1String("/opt/.PE-bear-staging/old");
+		seed.stagingRoot = QLatin1String("/opt/.PE-bear-staging");
+		seed.packagePath = QLatin1String(PKG);
+		seed.packageSize = 13;
+		seed.packageSha256 = digest();
+		seed.fromVersion = QLatin1String("0.7.2");
+		seed.toVersion = QLatin1String("0.7.3");
+		Transaction dead(&m_fs, &journal);
+		QVERIFY(dead.begin(seed, QLatin1String("old-run")));
+		QVERIFY(dead.backup(QLatin1String("/opt/.PE-bear-backup-old-run")));
+		/* ...and it died here. */
+	}
+	QVERIFY2(!m_fs.hasFile(targetExe()), "the fixture should start with the installation moved aside");
+
+	DirectoryInstaller platform(&m_fs, &m_reader);
+	FakeProcessProbe probe;
+	probe.setAlreadyExited();
+	FakeProcessLauncher launcher(&m_fs);
+	TestableHelper helper(&m_fs, &platform, &probe, &launcher,
+		UpdatePaths(QLatin1String(ROOT), QLatin1String(ROOT)));
+
+	/* Long enough after the dead run for its record to count as abandoned,
+	   and the instruction is dated to match so it is not refused as stale. */
+	const QDateTime now = QDateTime::currentDateTimeUtc().addSecs(Recovery::LIVE_WINDOW_SECONDS + 60);
+	helper.setNow(now);
+	HelperHandoff h = goodHandoff();
+	h.createdAtUtc = now.toString(Qt::ISODate);
+
+	const UpdateHelper::Result r = helper.run(h);
+	QVERIFY2(r == UpdateHelper::Succeeded,
+		qPrintable(UpdateHelper::resultToString(r) + QLatin1String(": ") + helper.lastError()));
+
+	/* The dead run was undone and recorded as such, then this one installed. */
+	QVERIFY(journal.findUnfinished().isEmpty());
+	QCOMPARE(m_fs.readFile(targetExe()), QByteArray("the new build"));
+	QVERIFY2(helper.journal().join(QLatin1String("\n")).contains(QLatin1String("old-run")),
+		"the recovery is not in the helper's own log");
+}
+
+void TestUpdateHelper::refusesWhileAnEarlierUpdateMayStillBeRunning()
+{
+	/* Same leftover, but written moments ago: a helper may be mid-run on
+	   this very installation. Opening a second transaction on top of it is
+	   two records disagreeing about one directory, so this one refuses --
+	   and refuses without touching anything. */
+	TransactionJournal journal(&m_fs, QLatin1String(ROOT) + QLatin1String("/transactions"));
+	QVERIFY(journal.prepare());
+	{
+		TransactionRecord seed;
+		seed.targetDir = QLatin1String(TARGET);
+		seed.stagingDir = QLatin1String("/opt/.PE-bear-staging/live");
+		seed.stagingRoot = QLatin1String("/opt/.PE-bear-staging");
+		seed.packagePath = QLatin1String(PKG);
+		seed.packageSize = 13;
+		seed.packageSha256 = digest();
+		seed.fromVersion = QLatin1String("0.7.2");
+		seed.toVersion = QLatin1String("0.7.3");
+		Transaction live(&m_fs, &journal);
+		QVERIFY(live.begin(seed, QLatin1String("live-run")));
+		/* still in Prepared, nothing moved -- a helper that has just begun */
+	}
+
+	DirectoryInstaller platform(&m_fs, &m_reader);
+	FakeProcessProbe probe;
+	probe.setAlreadyExited();
+	FakeProcessLauncher launcher(&m_fs);
+	TestableHelper helper(&m_fs, &platform, &probe, &launcher,
+		UpdatePaths(QLatin1String(ROOT), QLatin1String(ROOT)));
+
+	/* real clock: the other record is seconds old */
+	QCOMPARE(helper.run(goodHandoff()), UpdateHelper::RefusedUpdateInProgress);
+	QVERIFY(UpdateHelper::leftUntouched(UpdateHelper::RefusedUpdateInProgress));
+	QCOMPARE(launcher.runs(), 0);
+	assertUntouched();
+	/* The other run's record is still there for it to finish. */
+	QCOMPARE(journal.findUnfinished().size(), 1);
+}
 
 void TestUpdateHelper::rollsBackWhenTheNewBuildWillNotStart()
 {

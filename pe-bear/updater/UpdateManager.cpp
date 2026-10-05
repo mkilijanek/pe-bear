@@ -158,7 +158,12 @@ void UpdateManager::onReleaseReady(const pe_bear::updater::ReleaseInfo &release)
 	/* The release exists and fits, but this copy must not be replaced. Report
 	   it and stop: no download, no package manager, no elevation. */
 	if (!m_installation.isUpdatable()) {
-		failWith(ErrorManagedInstallation, m_installation.detail, StateManagedInstallation);
+		/* Two different reasons share one state, because the user's next step
+		   is the same -- update by hand -- but the explanation is not. "Managed
+		   by the system" would be a lie about a copy sitting on the Desktop. */
+		const UpdateError why = (m_installation.kind == InstallUserFolder)
+			? ErrorProtectedLocation : ErrorManagedInstallation;
+		failWith(why, m_installation.detail, StateManagedInstallation);
 		return;
 	}
 

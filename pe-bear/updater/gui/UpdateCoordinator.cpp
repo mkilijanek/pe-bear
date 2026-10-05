@@ -2,6 +2,10 @@
 #include "../ReleaseClient.h"
 #include "../DownloadManager.h"
 #include "../InstallationDetector.h"
+#include "../FileSystem.h"
+#include "../TransactionJournal.h"
+#include "../Recovery.h"
+#include "../UpdatePaths.h"
 #include "../../REbear.h"
 
 using namespace pe_bear::updater;
@@ -39,6 +43,15 @@ void UpdateCoordinator::onApplicationReady()
 {
 	if (m_started) return;
 	m_started = true;
+
+	/* Before anything to do with checking for updates, and regardless of
+	   whether checking is enabled: this is about an update that already
+	   happened and did not finish. After a helper crashes, the user does not
+	   relaunch the helper -- they relaunch PE-bear, and this is where that
+	   lands. Reached only on a real start, never from the handshake path,
+	   which returns before the window is shown. */
+	recoverInterruptedUpdates();
+
 	if (!m_settings || !m_settings->isAutoCheckEnabled()) return;
 
 	/* Deliberately late and asynchronous: no network work happens on the path
@@ -51,6 +64,29 @@ void UpdateCoordinator::onAutoCheckTimeout()
 {
 	if (!m_manager) return;
 	m_manager->checkForUpdatesIfDue();
+}
+
+void UpdateCoordinator::recoverInterruptedUpdates()
+{
+	RealFileSystem fs;
+	const UpdatePaths paths;
+	/* Nothing to recover if there is no journal yet, and creating one at
+	   every start just to find it empty would be a write for no reason. */
+	if (!fs.isDir(paths.transactionsDir())) return;
+
+	TransactionJournal journal(&fs, paths.transactionsDir());
+	Recovery recovery(&fs, &journal);
+
+	/* This process is a working PE-bear running from its installation
+	   directory, which is the one fact the helper never has: an old
+	   activated record for *this* directory is therefore kept, not undone. */
+	const QString runningFrom = m_manager ? m_manager->installation().installDir : QString();
+	recovery.run(runningFrom);
+
+	const QStringList lines = recovery.journal();
+	for (int i = 0; i < lines.size(); i++) {
+		qWarning("%s", qPrintable(lines.at(i)));
+	}
 }
 
 void UpdateCoordinator::checkManually()
