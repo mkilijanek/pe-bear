@@ -83,6 +83,9 @@ private slots:
 
 	void picksTheLinuxTarXzForAQt5Build();
 	void picksTheAppImageForAnAppImageBuild();
+	void anAppImageBuildIsToldButNotOffered();
+	void aMacBundleBuildIsToldButNotOffered();
+	void installsByDefaultOnlyWhatTheDirectoryInstallerHandles();
 	void picksTheWindowsPackageMatchingTheRuntime();
 	void refusesToMigrateBetweenQtMajors();
 	void refusesToMigrateBetweenArchitectures();
@@ -174,10 +177,48 @@ void TestAssetSelector::picksTheAppImageForAnAppImageBuild()
 {
 	/* Same OS, arch and Qt major as the tar.xz: only the package type tells
 	   them apart, which is exactly why it is part of the profile. */
-	const AssetSelector selector(profileFor(PlatformLinux, ArchX64, 6, PackageLinuxAppImage));
+	QSet<int> installable;
+	installable.insert(int(PackageLinuxAppImage));
+	const AssetSelector selector(profileFor(PlatformLinux, ArchX64, 6, PackageLinuxAppImage), installable);
 	ReleaseAsset selected;
 	QCOMPARE(selector.select(realRelease(), selected), AssetSelector::Selected);
 	QCOMPARE(selected.name, QString("PE-bear_0.7.2_qt6_x86_64_linux.AppImage"));
+}
+
+void TestAssetSelector::anAppImageBuildIsToldButNotOffered()
+{
+	/* No AppImage installer exists: the matching asset is still found and
+	   handed back, so the user can be pointed at it, but it is not Selected. */
+	const AssetSelector selector(profileFor(PlatformLinux, ArchX64, 6, PackageLinuxAppImage));
+	ReleaseAsset selected;
+	QStringList reasons;
+	QCOMPARE(selector.select(realRelease(), selected, &reasons), AssetSelector::NotInstallable);
+	QCOMPARE(selected.name, QString("PE-bear_0.7.2_qt6_x86_64_linux.AppImage"));
+	QVERIFY(reasons.last().contains(QLatin1String("no installer for linux-appimage")));
+}
+
+void TestAssetSelector::aMacBundleBuildIsToldButNotOffered()
+{
+	const AssetSelector selector(profileFor(PlatformMacOS, ArchX64, 6, PackageMacAppZip));
+	ReleaseAsset selected;
+	QCOMPARE(selector.select(realRelease(), selected), AssetSelector::NotInstallable);
+	QCOMPARE(selected.name, QString("PE-bear_0.7.2_qt6_x64_macos.app.zip"));
+}
+
+void TestAssetSelector::installsByDefaultOnlyWhatTheDirectoryInstallerHandles()
+{
+	QCOMPARE(AssetSelector::defaultInstallablePackageTypes(
+		profileFor(PlatformWindows, ArchX64, 6, PackageWindowsZip, QLatin1String("vs22"))),
+		QSet<int>() << int(PackageWindowsZip));
+	QCOMPARE(AssetSelector::defaultInstallablePackageTypes(
+		profileFor(PlatformLinux, ArchX64, 6, PackageLinuxTarXz)),
+		QSet<int>() << int(PackageLinuxTarXz));
+	QVERIFY(AssetSelector::defaultInstallablePackageTypes(
+		profileFor(PlatformLinux, ArchX64, 6, PackageLinuxAppImage)).isEmpty());
+	QVERIFY(AssetSelector::defaultInstallablePackageTypes(
+		profileFor(PlatformMacOS, ArchArm64, 6, PackageMacAppZip)).isEmpty());
+	QVERIFY(AssetSelector::defaultInstallablePackageTypes(
+		profileFor(PlatformLinux, ArchX64, 6, PackageUnknown)).isEmpty());
 }
 
 void TestAssetSelector::picksTheWindowsPackageMatchingTheRuntime()
@@ -280,7 +321,9 @@ void TestAssetSelector::refusesWhenNoInstallerHandlesThePackage()
 	const AssetSelector selector(profileFor(PlatformLinux, ArchX64, 5, PackageLinuxTarXz),
 		QSet<int>());
 	ReleaseAsset selected;
-	QCOMPARE(selector.select(realRelease(), selected), AssetSelector::NoCompatible);
+	QCOMPARE(selector.select(realRelease(), selected), AssetSelector::NotInstallable);
+	/* Distinct from "no package fits": the package is named. */
+	QCOMPARE(selected.name, QString("PE-bear_0.7.2_qt5.15.13_x64_linux.tar.xz"));
 }
 
 QTEST_APPLESS_MAIN(TestAssetSelector)

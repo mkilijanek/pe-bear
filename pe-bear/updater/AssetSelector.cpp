@@ -183,12 +183,14 @@ bool AssetSelector::parseAssetName(const QString &name, ReleaseAsset &asset)
 QSet<int> AssetSelector::defaultInstallablePackageTypes(const BuildProfile &profile)
 {
 	QSet<int> types;
-	/* A build can only ever be replaced by a package of its own type. When the
-	   build does not declare its package type (a developer build, or a package
-	   produced before the build manifest existed) nothing is installable and
-	   the flow degrades to notify-only. */
-	if (profile.packageType() != PackageUnknown) {
-		types.insert(static_cast<int>(profile.packageType()));
+	/* A build can only ever be replaced by a package of its own type, and only
+	   when an installer for that type exists. When the build does not declare
+	   its package type (a developer build, or a package produced before the
+	   build manifest existed), or declares one nothing here can install
+	   (AppImage, macOS bundle), the flow degrades to notify-only. */
+	const PackageType own = profile.packageType();
+	if (own == PackageWindowsZip || own == PackageLinuxTarXz) {
+		types.insert(static_cast<int>(own));
 	}
 	return types;
 }
@@ -241,11 +243,10 @@ bool AssetSelector::matches(const ReleaseAsset &asset, QString &reason) const
 	}
 	/* 6. minimum OS version. Asset names do not carry one today; an unknown
 	   value can only widen the match, never narrow it. */
-	/* 7. installer capability */
-	if (!m_installable.contains(static_cast<int>(asset.packageType))) {
-		reason = QLatin1String("no installer for ") + packageTypeToString(asset.packageType);
-		return false;
-	}
+	/* Whether anything here can install the kind is not a question of fit:
+	   see select(), which answers it separately so the user is told the
+	   truth -- "there is a new version; get it yourself" rather than "nothing
+	   for you". */
 	return true;
 }
 
@@ -310,5 +311,12 @@ AssetSelector::Outcome AssetSelector::select(const ReleaseInfo &release,
 		return Ambiguous;
 	}
 	selected = candidates.first();
+	if (!m_installable.contains(static_cast<int>(selected.packageType))) {
+		if (reasons) {
+			*reasons << selected.name + QLatin1String(": no installer for ")
+				+ packageTypeToString(selected.packageType);
+		}
+		return NotInstallable;
+	}
 	return Selected;
 }

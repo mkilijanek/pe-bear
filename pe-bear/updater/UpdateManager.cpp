@@ -144,6 +144,19 @@ void UpdateManager::onReleaseReady(const pe_bear::updater::ReleaseInfo &release)
 	const AssetSelector::Outcome outcome =
 		selector.select(release, asset, &m_selectionReasons, &digestIssue);
 
+	if (outcome == AssetSelector::NotInstallable) {
+		/* The release is real and the package is the right one; this build
+		   just has no installer for its kind (an AppImage, a macOS bundle).
+		   Told, with the release in hand, and stopped: no download, and the
+		   same state as a managed installation, because the user's next step
+		   is the same -- update by hand. */
+		m_candidate.release = release;
+		m_candidate.asset = asset;
+		failWith(ErrorInstallerUnavailable,
+			m_selectionReasons.isEmpty() ? QString() : m_selectionReasons.last(),
+			StateManagedInstallation);
+		return;
+	}
 	if (outcome != AssetSelector::Selected) {
 		UpdateError error = (outcome == AssetSelector::Ambiguous)
 			? ErrorAmbiguousAsset : ErrorNoCompatibleAsset;

@@ -27,7 +27,10 @@ public:
 	enum Outcome {
 		Selected = 0,
 		NoCompatible,
-		Ambiguous
+		Ambiguous,
+		/** The right asset exists (and is returned) but nothing in this
+		 *  build can install its kind: the user is told, not offered. */
+		NotInstallable
 	};
 
 	/**
@@ -38,7 +41,14 @@ public:
 	 */
 	static bool parseAssetName(const QString &name, ReleaseAsset &asset);
 
-	/** Package types this build can download, verify and hand to an installer. */
+	/**
+	 * The package kinds this build can install: its own, and only when an
+	 * installer for it exists. Today that is the whole-directory installer,
+	 * which handles Windows zips and Linux tar.xz directories. An AppImage is
+	 * a single file and a macOS bundle has its own rules (quarantine,
+	 * /Applications), and neither has an installer yet -- those builds are
+	 * told about a release and pointed at it, never offered an install.
+	 */
 	static QSet<int> defaultInstallablePackageTypes(const BuildProfile &profile);
 
 	AssetSelector(const BuildProfile &profile, const QSet<int> &installablePackageTypes);

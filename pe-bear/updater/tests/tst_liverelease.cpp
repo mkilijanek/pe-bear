@@ -146,7 +146,14 @@ void TestLiveRelease::eachShippedVariantResolvesToExactlyOnePackage()
 	QStringList reasons;
 	const AssetSelector::Outcome outcome = selector.select(m_release, selected, &reasons);
 
-	if (outcome != AssetSelector::Selected) {
+	/* Every shipped variant must resolve to exactly one package. Whether that
+	   package can then be *installed* is a separate fact: only the kinds the
+	   directory installer handles are offered, the others are named and the
+	   user is pointed at them. */
+	const bool installable = !AssetSelector::defaultInstallablePackageTypes(profile).isEmpty();
+	const AssetSelector::Outcome wanted = installable
+		? AssetSelector::Selected : AssetSelector::NotInstallable;
+	if (outcome != wanted) {
 		QString message = QLatin1String("no unique package for ") + profile.toString()
 			+ QLatin1String("\n");
 		for (int i = 0; i < reasons.size(); i++) {

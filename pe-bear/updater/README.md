@@ -4,12 +4,15 @@ Native update discovery for PE-bear, built on the GitHub Releases API.
 
 This directory contains milestones **M1** (discovery, download, verification)
 and **M2** (the transactional installer, the helper process, recovery, and the
-hand-off from the GUI -- validated on Windows only to the extent recorded in
-#5 and #27). Remaining:
-M3 -- platform coverage for Linux and macOS packaging shapes -- and M4, which
-wires `PEBEAR_PACKAGE_TYPE` and the `pe-bear-build.json` manifest into the
-published packages. Until M4 does that, a release build still degrades to
-notify-only, because it cannot prove which package would replace it.
+hand-off from the GUI -- validated end to end on a Windows host, see #5 and
+#27), and **M3** as rescoped: a portable Linux tar.xz installation is
+replaced the same way and exercised for real in CI (`tst_e2e_linux_tarxz`);
+an AppImage and a macOS bundle are *told* about a new release and pointed at
+it, never offered an install, because no installer for a single-file image
+or a bundle exists. Remaining: M4, which wires `PEBEAR_PACKAGE_TYPE` and the
+`pe-bear-build.json` manifest into the published packages. Until M4 does
+that, a release build still degrades to notify-only, because it cannot prove
+which package would replace it.
 
 ## What it does today
 
@@ -101,6 +104,9 @@ installation is exactly as it was.
   or in a directory the user cannot write to is reported and left alone.
 - Elevate. No `sudo`, no `pkexec`, no UAC, and no package manager is ever run —
   not even to query one.
+- Install what it has no installer for. An AppImage build or a macOS bundle
+  learns that a new release exists and is shown the matching package, and the
+  rest is up to the user: nothing is downloaded, nothing is replaced.
 - Migrate between variants. A Qt5 build is never replaced by a Qt6 package, an
   x86 build never by an x64 one, an AppImage never by a tarball.
 - Resume a partial download. Bytes from an earlier, unverified session are
