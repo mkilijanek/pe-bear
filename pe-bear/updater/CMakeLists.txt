@@ -28,6 +28,7 @@ set (update_core_srcs
 	LibArchiveReader.cpp
 	Installer.cpp
 	DirectoryInstaller.cpp
+	PlatformInstallerFactory.cpp
 	StartupHandshake.cpp
 	HelperHandoff.cpp
 	ProcessControl.cpp
@@ -58,12 +59,26 @@ set (update_core_hdrs
 	Installer.h
 	PlatformInstaller.h
 	DirectoryInstaller.h
+	PlatformInstallerFactory.h
 	StartupHandshake.h
 	HelperHandoff.h
 	ProcessControl.h
 	UpdateHelper.h
 	Random.h
 )
+
+# Platform-specific installers
+if(UNIX AND NOT APPLE)
+	# Linux platform-specific installer
+	list(APPEND update_core_srcs LinuxInstaller.cpp)
+	list(APPEND update_core_hdrs LinuxInstaller.h)
+endif()
+
+if(APPLE)
+	# macOS platform-specific installer  
+	list(APPEND update_core_srcs MacOSInstaller.cpp)
+	list(APPEND update_core_hdrs MacOSInstaller.h)
+endif()
 
 add_library(pebear_update_core STATIC ${update_core_srcs} ${update_core_hdrs})
 

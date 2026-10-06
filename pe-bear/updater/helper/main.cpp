@@ -22,7 +22,7 @@
 #include "../UpdatePaths.h"
 #include "../HelperHandoff.h"
 #include "../UpdateHelper.h"
-#include "../DirectoryInstaller.h"
+#include "../PlatformInstallerFactory.h"
 #include "../ProcessControl.h"
 #include "../Version.h"
 
@@ -169,7 +169,8 @@ int main(int argc, char *argv[])
 	IArchiveReader *readerPtr = NULL;
 #endif
 
-	DirectoryInstaller platform(&fs, readerPtr);
+	/* Use the platform-specific installer factory to get the appropriate installer */
+	PlatformInstaller *platform = PlatformInstallerFactory::create(&fs, readerPtr);
 	RealProcessProbe probe;
 	RealProcessLauncher launcher;
 
@@ -191,5 +192,9 @@ int main(int argc, char *argv[])
 	if (result != UpdateHelper::Succeeded) {
 		complain(UpdateHelper::resultToString(result) + QLatin1String(": ") + helper.lastError());
 	}
+	
+	/* Clean up the platform installer */
+	delete platform;
+	
 	return UpdateHelper::resultToExitCode(result);
 }

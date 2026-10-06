@@ -230,6 +230,16 @@ public:
 		return true;
 	}
 	virtual bool restrictToOwner(const QString &) { return true; }
+	
+	virtual bool setExecutable(const QString &path, bool executable)
+	{
+		const QString p = clean(path);
+		if (shouldFail(QLatin1String("setExecutable"), p)) return false;
+		if (!m_files.contains(p)) return fail("setExecutable: no such file");
+		/* In the fake, we just track that it was called; the executable bit
+		   is not used by anything we test. */
+		return true;
+	}
 
 	virtual QString lastError() const { return m_lastError; }
 

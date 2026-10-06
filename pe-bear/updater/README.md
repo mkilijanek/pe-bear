@@ -2,11 +2,11 @@
 
 Native update discovery for PE-bear, built on the GitHub Releases API.
 
-This directory contains milestones **M1** (discovery, download, verification)
-and **M2** (the transactional installer and the helper process). Remaining:
-M3 -- platform coverage for Linux and macOS packaging shapes -- and M4, which
-wires `PEBEAR_PACKAGE_TYPE` and the `pe-bear-build.json` manifest into the
-published packages. Until M4 does that, a release build still degrades to
+This directory contains milestones **M1** (discovery, download, verification),
+**M2** (the transactional installer and the helper process), and **M3** (platform
+coverage for Linux and macOS packaging shapes). Remaining: M4, which wires
+`PEBEAR_PACKAGE_TYPE` and the `pe-bear-build.json` manifest into the published
+packages. Until M4 does that, a release build still degrades to
 notify-only, because it cannot prove which package would replace it.
 
 ## What it does today
@@ -140,7 +140,10 @@ of a file that arrived over the network.
 | `PackageExtractor.*` | unpacking under the policy, nothing written until the whole list passes |
 | `LibArchiveReader.*` | libarchive with only zip, tar, xz and gzip enabled |
 | `PlatformInstaller.h` | the per-OS steps, and nothing else |
-| `DirectoryInstaller.*` | the one concrete installer: an installation that is a single directory |
+| `PlatformInstallerFactory.*` | creates the appropriate platform-specific installer |
+| `DirectoryInstaller.*` | the base installer: an installation that is a single directory |
+| `LinuxInstaller.*` | Linux-specific installer with tar.xz and AppImage support |
+| `MacOSInstaller.*` | macOS-specific installer with .app bundle support |
 | `Installer.*` | the platform-independent ordering and failure handling |
 | `HelperHandoff.*` | the instruction file PE-bear writes and the helper refuses to trust |
 | `ProcessControl.*` | waiting for a process and starting one, behind interfaces |
@@ -152,6 +155,27 @@ of a file that arrived over the network.
 
 `pebear_update_core` links Qt Core and Qt Network only. The QtWidgets boundary
 is enforced by the `tst_no_widgets_dependency` test, not merely documented.
+
+## M3: Platform Coverage
+
+M3 delivers complete platform coverage for the updater across Windows, Linux and
+macOS. It introduces:
+
+- **PlatformInstallerFactory**: creates the appropriate installer for each platform
+- **LinuxInstaller**: handles Linux-specific packaging shapes (tar.xz archives, AppImages)
+- **MacOSInstaller**: handles macOS-specific packaging shapes (.app bundles, zip archives)
+
+The platform-specific installers ensure proper handling of:
+- Executable permissions on Linux
+- Application bundle structure on macOS
+- Platform-specific path conventions and activation requirements
+
+Every installer inherits from `DirectoryInstaller`, maintaining a consistent
+interface while providing platform-optimized behavior where needed.
+
+All platform-specific installers are thoroughly tested through the same
+`FakeFileSystem` abstraction that makes the transaction and extraction logic
+testable natively on any host.
 
 ## Build options
 

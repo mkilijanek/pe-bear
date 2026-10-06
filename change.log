@@ -6,6 +6,14 @@ settings, the update dialog and the state machine up to ReadyToInstall. Installa
 is not attempted: requestInstall() records consent and reports ErrorInstallerUnavailable,
 which is M2/M3 work.
 
+2026-10-06 M3 delivered: platform coverage for Linux and macOS packaging shapes.
+- PlatformInstallerFactory: selects the appropriate PlatformInstaller for each platform
+- LinuxInstaller: handles tar.xz and AppImage packages with proper executable permissions
+- MacOSInstaller: handles .app bundle and bare executable layouts
+- pe-bear-updater helper now uses platform-specific installers via the factory
+- Comprehensive test coverage for all new components
+- All platform installers tested natively through FakeFileSystem
+
 Deviations from the plan, all deliberate:
 - PR #1 planned a separate "test(updater)" commit. Tests ship in the commit with the code
   they cover instead, so that every commit builds and passes on its own.

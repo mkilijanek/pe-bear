@@ -26,6 +26,9 @@ set(updater_tests
 	tst_startuphandshake
 	tst_helperhandoff
 	tst_directoryinstaller
+	tst_platforminstallerfactory
+	tst_linuxinstaller
+	tst_macosinstaller
 	tst_updatehelper
 	tst_crossvolumeinstall
 	tst_processcontrol

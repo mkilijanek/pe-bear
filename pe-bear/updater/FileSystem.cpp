@@ -241,3 +241,23 @@ bool RealFileSystem::restrictToOwner(const QString &path)
 {
 	return UpdatePaths::restrictToOwner(path);
 }
+
+bool RealFileSystem::setExecutable(const QString &path, bool executable)
+{
+	if (path.isEmpty()) return fail(QLatin1String("empty path"));
+	
+	QFile f(path);
+	if (!f.exists()) return fail(QLatin1String("file does not exist: ") + QDir::toNativeSeparators(path));
+	
+	QFile::Permissions perms = f.permissions();
+	if (executable) {
+		perms |= QFile::ExeOwner | QFile::ExeUser | QFile::ExeGroup | QFile::ExeOther;
+	} else {
+		perms &= ~(QFile::ExeOwner | QFile::ExeUser | QFile::ExeGroup | QFile::ExeOther);
+	}
+	
+	if (!f.setPermissions(perms)) {
+		return fail(QLatin1String("could not set executable permissions on ") + QDir::toNativeSeparators(path));
+	}
+	return true;
+}

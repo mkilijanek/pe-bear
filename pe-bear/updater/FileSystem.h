@@ -118,6 +118,9 @@ public:
 	virtual bool setStandardPermissions(const QString &path, bool executable) = 0;
 	virtual bool restrictToOwner(const QString &path) = 0;
 
+	/** Sets or clears the executable permission bit on @p path. */
+	virtual bool setExecutable(const QString &path, bool executable) = 0;
+
 	/** Last error text from the most recent failed call, for diagnostics. */
 	virtual QString lastError() const = 0;
 };
@@ -149,6 +152,7 @@ public:
 
 	virtual bool setStandardPermissions(const QString &path, bool executable);
 	virtual bool restrictToOwner(const QString &path);
+	virtual bool setExecutable(const QString &path, bool executable);
 
 	virtual QString lastError() const { return m_lastError; }
 
