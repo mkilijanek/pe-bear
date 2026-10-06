@@ -4,6 +4,7 @@ skip_tags: true
 image:
 - Visual Studio 2022
 - macos
+- Ubuntu2204
 
 matrix:
   exclude:
@@ -48,7 +49,11 @@ for:
 
     install:
       - git submodule update --init --recursive
-      - export QTDIR="$HOME/Qt/6.8/gcc_64"
+      # AppVeyor rotates the Qt builds on its images, so resolve the newest
+      # Qt6 present rather than naming one directory. before_build runs
+      # `qmake --version`, which fails loudly if nothing was found.
+      - export QTDIR=$(ls -d $HOME/Qt/6.*/gcc_64 2>/dev/null | sort -V | tail -1)
+      - echo "Using Qt at ${QTDIR:-<none found>}"
       - export LD_LIBRARY_PATH="$QTDIR/lib:$LD_LIBRARY_PATH"
       - export PATH="$QTDIR/bin:$PATH"
  
