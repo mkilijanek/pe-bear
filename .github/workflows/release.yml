@@ -278,18 +278,33 @@ jobs:
           tag="${{ needs.version.outputs.tag }}"
           repo="${{ github.repository }}"
           fail() { echo "::error::$*"; gh release delete "$tag" --repo "$repo" --yes || true; exit 1; }
+          # A draft is not reachable by tag: /releases/tags/<tag> answers 404
+          # until the release is published (the first run of this workflow
+          # found that out, and rightly deleted its own draft). The draft is
+          # found in the listing and read by id instead.
+          rid=$(gh api "repos/$repo/releases?per_page=100" --jq ".[] | select(.tag_name==\"$tag\") | .id" | head -1)
+          [ -n "$rid" ] || fail "the draft for $tag is not in the release listing"
           mkdir -p back && cd back
           gh release download "$tag" --repo "$repo" --dir . || fail "could not download the draft's assets"
+          # GitHub computes the digest after the upload; give it a moment
+          # rather than failing on a race.
+          meta=""
+          for attempt in 1 2 3 4 5 6; do
+            meta=$(gh api "repos/$repo/releases/$rid")
+            missing=$(printf '%s' "$meta" | jq -r '[.assets[] | select((.digest // "") == "")] | length')
+            [ "$missing" = 0 ] && break
+            echo "digest not yet reported for $missing asset(s), waiting"; sleep 10
+          done
           while read -r sum name; do
             [ -f "$name" ] || fail "asset $name was not served back"
             got=$(sha256sum "$name" | cut -c1-64)
             [ "$got" = "$sum" ] || fail "asset $name: served $got, built $sum"
-            api=$(gh api "repos/$repo/releases/tags/$tag" --jq ".assets[] | select(.name==\"$name\") | .digest" 2>/dev/null || true)
+            api=$(printf '%s' "$meta" | jq -r ".assets[] | select(.name==\"$name\") | .digest // empty")
             [ -n "$api" ] || fail "asset $name: GitHub reports no digest (the updater refuses assets without one)"
             [ "$api" = "sha256:$sum" ] || fail "asset $name: GitHub digest $api != built sha256:$sum"
             echo "verified $name ($sum)"
           done < ../release/SHA256SUMS
-          n=$(gh api "repos/$repo/releases/tags/$tag" --jq '.assets | length')
+          n=$(printf '%s' "$meta" | jq '.assets | length')
           expected=$(( $(wc -l < ../release/SHA256SUMS) + 1 ))
           [ "$n" -eq "$expected" ] || fail "release has $n assets, expected $expected"
       - name: Release
