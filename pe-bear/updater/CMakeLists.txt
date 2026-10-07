@@ -164,9 +164,9 @@ if(PEBEAR_UPDATE_REPOSITORY)
 		PEBEAR_UPDATE_REPOSITORY="${PEBEAR_UPDATE_REPOSITORY}")
 	message(STATUS "updater: releases from ${PEBEAR_UPDATE_REPOSITORY}")
 endif()
-if(COMMIT_HASH)
+if(PEBEAR_COMMIT)
 	target_compile_definitions(pebear_update_core PUBLIC
-		PEBEAR_BUILD_ID="${COMMIT_HASH}")
+		PEBEAR_BUILD_ID="${PEBEAR_COMMIT}")
 endif()
 
 SOURCE_GROUP("Source Files\\updater" FILES ${update_core_srcs})
@@ -202,6 +202,11 @@ if(PEBEAR_LIBARCHIVE_FOUND)
 		COMPONENT pe-bear-updater
 	)
 endif()
+
+# What this build is, as a file (pe-bear-build.json). Written here, after
+# libarchive and the helper have been decided and before the tests are
+# registered, because one of them reads it.
+include("${CMAKE_SOURCE_DIR}/cmake/BuildManifest.cmake")
 
 if(PEBEAR_BUILD_UPDATER_TESTS)
 	add_subdirectory(tests)

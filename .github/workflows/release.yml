@@ -1,0 +1,299 @@
+# Package -> Hash -> Publish -> Verify.
+#
+# Runs on a version tag. Each package is built with the descriptors the
+# updater needs to recognise itself (PEBEAR_PACKAGE_TYPE, the runtime tag,
+# the fork patch number, the repository releases come from), carries
+# pe-bear-build.json and the updater helper, and is named by the grammar
+# AssetSelector understands. The release is created as a draft, every asset
+# is downloaded back and its bytes compared with what was uploaded and with
+# the digest GitHub attached, and only then is the draft published -- the
+# API's "latest release", which installed copies ask for, never sees an
+# unverified one.
+#
+# The tag must agree with the source: v0.7.2 needs rebear_ver_short.h to say
+# 0.7.2, and v0.7.2-p004 is that plus PEBEAR_FORK_PATCH=4. A mismatch stops
+# the run before anything is built.
+name: Release
+
+on:
+  push:
+    tags: [ "v*" ]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to package and publish (e.g. v0.7.2-p004)"
+        required: true
+
+permissions:
+  contents: read
+
+env:
+  QT_VERSION: 6.8.1
+  QT_ARCH: win64_msvc2022_64
+
+jobs:
+  # ------------------------------------------------------------- the version
+  version:
+    name: Version from the tag
+    runs-on: ubuntu-24.04
+    outputs:
+      tag: ${{ steps.v.outputs.tag }}
+      version: ${{ steps.v.outputs.version }}
+      fork_patch: ${{ steps.v.outputs.fork_patch }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+      - id: v
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${{ github.event.inputs.tag || github.ref_name }}"
+          [[ "$tag" =~ ^v([0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?)(-p([0-9]+))?$ ]] || { echo "::error::tag '$tag' is not v<a.b.c>[-p<N>]"; exit 1; }
+          base="${BASH_REMATCH[1]}"; patch=$((10#${BASH_REMATCH[4]:-0}))
+          major=$(sed -n 's/^#define REBEAR_MAJOR_VERSION[[:space:]]*\([0-9]*\).*/\1/p' pe-bear/rebear_ver_short.h)
+          minor=$(sed -n 's/^#define REBEAR_MINOR_VERSION[[:space:]]*\([0-9]*\).*/\1/p' pe-bear/rebear_ver_short.h)
+          micro=$(sed -n 's/^#define REBEAR_MICRO_VERSION[[:space:]]*\([0-9]*\).*/\1/p' pe-bear/rebear_ver_short.h)
+          src="$major.$minor.$micro"
+          [ "$base" = "$src" ] || { echo "::error::tag says $base but rebear_ver_short.h says $src"; exit 1; }
+          version="$base"; [ "$patch" -gt 0 ] && version="$base-p$(printf %03d "$patch")"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "fork_patch=$patch" >> "$GITHUB_OUTPUT"
+          echo "tag $tag -> version $version, fork patch $patch"
+
+  # ------------------------------------------------------------- Windows zip
+  package-windows:
+    name: Package windows-zip (Qt6, MSVC x64)
+    needs: version
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.version.outputs.tag }}
+          submodules: recursive
+      - name: Install Qt
+        run: |
+          python -m pip install --disable-pip-version-check "aqtinstall==3.1.*"
+          python -m aqt install-qt windows desktop ${env:QT_VERSION} ${env:QT_ARCH} -O ${{ github.workspace }}\Qt
+      - name: Install libarchive
+        run: |
+          & "$env:VCPKG_INSTALLATION_ROOT\vcpkg.exe" install libarchive:x64-windows
+          if ($LASTEXITCODE -ne 0) { throw "vcpkg install failed" }
+      - name: Configure
+        run: >
+          cmake -S . -B build -A x64
+          -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake"
+          -DVCPKG_TARGET_TRIPLET=x64-windows
+          -DCMAKE_PREFIX_PATH="${{ github.workspace }}/Qt/${{ env.QT_VERSION }}/msvc2022_64"
+          -DCOMMIT_HASH=${{ github.sha }}
+          -DPEBEAR_PACKAGE_TYPE=windows-zip
+          -DPEBEAR_BUILD_RUNTIME=vs22
+          -DPEBEAR_FORK_PATCH=${{ needs.version.outputs.fork_patch }}
+          -DPEBEAR_UPDATE_REPOSITORY=${{ github.repository }}
+          -DPEBEAR_DEPLOY_DIR="${{ github.workspace }}/deploy"
+          -DPEBEAR_DEPLOY_LEAN=ON
+          -DPEBEAR_BUILD_TESTS=ON
+      - name: Build (deploys to ./deploy)
+        run: cmake --build build --config Release --parallel
+      - name: Test
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          $env:PATH = "${{ github.workspace }}\Qt\${{ env.QT_VERSION }}\msvc2022_64\bin;$env:PATH"
+          $env:PATH = "$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows\bin;$env:PATH"
+          ctest --test-dir build -C Release --output-on-failure --no-tests=error
+      # The package is not a package until it can say what it is: the helper
+      # must be there, the manifest must be there, and the version the helper
+      # reports must be the one the tag names.
+      - name: Check the deployment is complete and says the right version
+        shell: pwsh
+        run: |
+          foreach ($f in "PE-bear.exe", "pe-bear-updater.exe", "pe-bear-build.json", "Qt6Core.dll", "archive.dll") {
+            if (-not (Test-Path "deploy/$f")) { Write-Output "::error::deploy/$f is missing"; exit 1 }
+          }
+          $v = (& "deploy/pe-bear-updater.exe" --version | Select-Object -First 1).Trim()
+          if ($v -ne "${{ needs.version.outputs.version }}") { Write-Output "::error::helper says '$v', tag says '${{ needs.version.outputs.version }}'"; exit 1 }
+          $m = Get-Content deploy/pe-bear-build.json -Raw | ConvertFrom-Json
+          if ($m.version -ne "${{ needs.version.outputs.version }}" -or $m.packageType -ne "windows-zip" -or $m.runtime -ne "vs22") {
+            Write-Output "::error::manifest disagrees: $(Get-Content deploy/pe-bear-build.json -Raw)"; exit 1 }
+          Write-Output "deployment ok: $v"
+      # Python's zipfile, not Compress-Archive: Windows PowerShell 5.1 writes
+      # entry names with backslashes, which readers on other platforms keep as
+      # literal characters. Entries are sorted so the archive is reproducible
+      # for the same inputs.
+      - name: Package
+        shell: pwsh
+        run: |
+          $name = "PE-bear_${{ needs.version.outputs.version }}_qt6_x64_win_vs22.zip"
+          python - $name @'
+          import os, sys, zipfile
+          name = sys.argv[1]; root = "deploy"
+          with zipfile.ZipFile(name, "w", zipfile.ZIP_DEFLATED) as z:
+              for d, dirs, files in os.walk(root):
+                  dirs.sort()
+                  for f in sorted(files):
+                      p = os.path.join(d, f)
+                      z.write(p, os.path.relpath(p, root).replace(os.sep, "/"))
+          print(name, os.path.getsize(name), "bytes")
+          '@
+          New-Item -ItemType Directory -Force out | Out-Null
+          Move-Item $name out/
+          (Get-FileHash "out/$name" -Algorithm SHA256).Hash.ToLower() + "  $name" | Out-File -Encoding ascii "out/$name.sha256"
+          Get-Content "out/$name.sha256"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: package-windows
+          path: out/
+          if-no-files-found: error
+
+  # ------------------------------------------------------------- Linux tar.xz
+  package-linux:
+    name: Package linux-tar-xz (Qt6, x64)
+    needs: version
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.version.outputs.tag }}
+          submodules: recursive
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends build-essential cmake ninja-build libarchive-dev qt6-base-dev xz-utils
+      - name: Configure
+        run: >
+          cmake -S . -B build -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          -DCOMMIT_HASH=${{ github.sha }}
+          -DPEBEAR_PACKAGE_TYPE=linux-tar-xz
+          -DPEBEAR_FORK_PATCH=${{ needs.version.outputs.fork_patch }}
+          -DPEBEAR_UPDATE_REPOSITORY=${{ github.repository }}
+          -DPEBEAR_BUILD_TESTS=ON
+      - name: Build
+        run: cmake --build build --parallel
+      # The whole suite, including the two end-to-end runs with these very
+      # binaries: an install through the helper and a rollback.
+      - name: Test
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: ctest --test-dir build --output-on-failure --no-tests=error
+      - name: Check the build says the right version
+        run: |
+          set -euo pipefail
+          v=$(build/pe-bear/updater/pe-bear-updater --version)
+          [ "$v" = "${{ needs.version.outputs.version }}" ] || { echo "::error::helper says '$v', tag says '${{ needs.version.outputs.version }}'"; exit 1; }
+          grep -q '"packageType": "linux-tar-xz"' build/pe-bear-build.json || { echo "::error::manifest lacks the package type"; cat build/pe-bear-build.json; exit 1; }
+          echo "build ok: $v"
+      # What upstream ships for Linux: the executables against the distribution's
+      # Qt, in a directory named after the release, with the manifest beside them.
+      - name: Package
+        run: |
+          set -euo pipefail
+          ver="${{ needs.version.outputs.version }}"
+          stage="PE-bear-$ver"
+          mkdir -p "$stage" out
+          cp build/pe-bear/PE-bear build/pe-bear/updater/pe-bear-updater build/pe-bear-build.json LICENSE "$stage/"
+          name="PE-bear_${ver}_qt6_x64_linux.tar.xz"
+          XZ_OPT="-T0 -6" tar --sort=name --owner=0 --group=0 --numeric-owner --mtime="@0" -cJf "out/$name" "$stage"
+          (cd out && sha256sum "$name" > "$name.sha256" && cat "$name.sha256")
+      - uses: actions/upload-artifact@v4
+        with:
+          name: package-linux
+          path: out/
+          if-no-files-found: error
+
+  # ------------------------------------------------------------- publish, then verify
+  publish:
+    name: Publish as draft, verify, release
+    needs: [ version, package-windows, package-linux ]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.version.outputs.tag }}
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      # Every asset name must fit the grammar the updater parses; one that
+      # does not would be published and then invisible to every installed
+      # copy, which is the kind of mistake that is cheaper to refuse here.
+      - name: Collect and check the assets
+        id: assets
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          find artifacts -type f \( -name '*.zip' -o -name '*.tar.xz' -o -name '*.sha256' \) -exec mv {} release/ \;
+          cd release
+          for a in *.zip *.tar.xz; do
+            [[ "$a" =~ ^PE-bear_[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?(-p[0-9]{3,})?_qt[0-9]+_(x64|x86|arm64)_(win|linux|macos)(_vs[0-9]+)?\.(zip|tar\.xz)$ ]] \
+              || { echo "::error::asset name '$a' does not fit the grammar"; exit 1; }
+            [[ "$a" == *"_${{ needs.version.outputs.version }}_"* ]] || { echo "::error::asset '$a' is not of version ${{ needs.version.outputs.version }}"; exit 1; }
+            sha256sum -c "$a.sha256"
+          done
+          cat *.sha256 > SHA256SUMS
+          rm -f *.sha256
+          echo "--- release contents:"; ls -l
+          echo "--- SHA256SUMS:"; cat SHA256SUMS
+      - name: Release notes
+        run: |
+          set -euo pipefail
+          v="${{ needs.version.outputs.version }}"
+          {
+            echo "PE-bear $v, built from \`${{ github.sha }}\` by the Release workflow."
+            echo
+            echo "| Asset | What it is |"
+            echo "|---|---|"
+            for a in release/*.zip; do echo "| \`$(basename "$a")\` | Windows x64, MSVC 2022, Qt ${{ env.QT_VERSION }}: portable, unzip anywhere writable and run \`PE-bear.exe\` |"; done
+            for a in release/*.tar.xz; do echo "| \`$(basename "$a")\` | Linux x64 against Ubuntu 24.04's Qt 6: \`PE-bear\`, \`pe-bear-updater\`, \`pe-bear-build.json\` |"; done
+            echo "| \`SHA256SUMS\` | digests of the above; GitHub attaches the same digest to each asset and the updater verifies against it |"
+            echo
+            echo "Each package carries \`pe-bear-build.json\` (what the build is) and \`pe-bear-updater\` (what replaces a portable installation). A portable copy of an earlier version of this repository's builds will find this release through *Help → Check for Updates*."
+            echo
+            echo "Every asset was downloaded back after upload and its bytes compared with what was built and with the digest GitHub reports before this release was published."
+          } > notes.md
+          cat notes.md
+      - name: Publish as a draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="${{ needs.version.outputs.tag }}"
+          if gh release view "$tag" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            echo "::error::a release for $tag already exists; delete it first if it must be rebuilt"; exit 1
+          fi
+          gh release create "$tag" --repo "${{ github.repository }}" --draft --title "PE-bear ${{ needs.version.outputs.version }}" --notes-file notes.md release/*
+      # The verification this whole workflow exists for: what GitHub serves is
+      # what was built, byte for byte, and the digest it reports for each asset
+      # is the digest of those bytes. Anything else and the draft is deleted.
+      - name: Verify what was published
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="${{ needs.version.outputs.tag }}"
+          repo="${{ github.repository }}"
+          fail() { echo "::error::$*"; gh release delete "$tag" --repo "$repo" --yes || true; exit 1; }
+          mkdir -p back && cd back
+          gh release download "$tag" --repo "$repo" --dir . || fail "could not download the draft's assets"
+          while read -r sum name; do
+            [ -f "$name" ] || fail "asset $name was not served back"
+            got=$(sha256sum "$name" | cut -c1-64)
+            [ "$got" = "$sum" ] || fail "asset $name: served $got, built $sum"
+            api=$(gh api "repos/$repo/releases/tags/$tag" --jq ".assets[] | select(.name==\"$name\") | .digest" 2>/dev/null || true)
+            [ -n "$api" ] || fail "asset $name: GitHub reports no digest (the updater refuses assets without one)"
+            [ "$api" = "sha256:$sum" ] || fail "asset $name: GitHub digest $api != built sha256:$sum"
+            echo "verified $name ($sum)"
+          done < ../release/SHA256SUMS
+          n=$(gh api "repos/$repo/releases/tags/$tag" --jq '.assets | length')
+          expected=$(( $(wc -l < ../release/SHA256SUMS) + 1 ))
+          [ "$n" -eq "$expected" ] || fail "release has $n assets, expected $expected"
+      - name: Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release edit "${{ needs.version.outputs.tag }}" --repo "${{ github.repository }}" --draft=false --latest
+          gh release view "${{ needs.version.outputs.tag }}" --repo "${{ github.repository }}" --json tagName,isDraft,isPrerelease,assets --jq '{tag: .tagName, draft: .isDraft, prerelease: .isPrerelease, assets: [.assets[].name]}'

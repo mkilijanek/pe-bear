@@ -13,6 +13,8 @@ or a bundle exists. Remaining: M4, which wires `PEBEAR_PACKAGE_TYPE` and the
 `pe-bear-build.json` manifest into the published packages. Until M4 does
 that, a release build still degrades to notify-only, because it cannot prove
 which package would replace it.
+That is what the Release workflow does (see *Releases* below); a developer
+build without `PEBEAR_PACKAGE_TYPE` still degrades to notify-only, on purpose.
 
 ## What it does today
 
@@ -186,6 +188,58 @@ of a file that arrived over the network.
 `pebear_update_core` links Qt Core and Qt Network only. The QtWidgets boundary
 is enforced by the `tst_no_widgets_dependency` test, not merely documented.
 
+## Releases: Package, Hash, Publish, Verify
+
+`.github/workflows/release.yml` runs on a `v*` tag (or by hand on an existing
+one) and is the only path by which a release is meant to appear:
+
+1. **Version from the tag.** `v0.7.2` must match `rebear_ver_short.h`;
+   `v0.7.2-p004` is that plus `PEBEAR_FORK_PATCH=4`. A mismatch stops the run
+   before anything is built.
+2. **Package.** Windows (MSVC 2022, Qt 6.8.1, libarchive from vcpkg) is built
+   with `PEBEAR_PACKAGE_TYPE=windows-zip`, `PEBEAR_BUILD_RUNTIME=vs22`, the
+   fork patch, `PEBEAR_UPDATE_REPOSITORY=<this repository>` and
+   `COMMIT_HASH`, deployed with `windeployqt` and zipped (entry names with
+   `/`) as `PE-bear_<version>_qt6_x64_win_vs22.zip`. Linux (Ubuntu 24.04,
+   Qt 6) is built with `linux-tar-xz` and packed as
+   `PE-bear_<version>_qt6_x64_linux.tar.xz` holding `PE-bear`,
+   `pe-bear-updater`, `pe-bear-build.json` and the licence. Both jobs run the
+   whole test suite first -- on Linux that includes the two end-to-end runs
+   with these very binaries -- and refuse to package unless the helper and
+   the manifest are present and `pe-bear-updater --version` says what the
+   tag says.
+3. **Hash.** Each asset's SHA-256 is recorded; `SHA256SUMS` is published
+   with the assets. Every asset name is checked against the grammar
+   `AssetSelector` parses, so nothing is published that installed copies
+   could not find.
+4. **Publish as a draft.** The GitHub API's "latest release", which
+   installed copies ask for, does not include drafts.
+5. **Verify.** Every asset is downloaded back and its bytes hashed and
+   compared with what was built, and the `digest` GitHub attached to the
+   asset is compared with the same value. Any difference deletes the draft
+   and fails the run. Only then is the draft published and marked latest.
+
+### `pe-bear-build.json`
+
+Written by `cmake/BuildManifest.cmake` at configure time into the build
+directory, copied into the Windows deployment and the Linux package:
+
+```json
+{ "manifestVersion": 1, "name": "PE-bear", "version": "0.7.2-p004",
+  "baseVersion": "0.7.2", "forkPatch": 4, "commit": "<sha>",
+  "platform": "windows", "arch": "x64", "qtMajor": 6, "qtVersion": "6.8.1",
+  "runtime": "vs22", "packageType": "windows-zip", "minOsVersion": "",
+  "updateRepository": "mkilijanek/pe-bear", "updaterHelper": true }
+```
+
+It says what a package is without running it. `tst_buildmanifest` holds it
+to the compiled `BuildProfile` -- platform, architecture, Qt major, runtime,
+package type, commit, version -- so the file and the binary cannot drift
+apart unnoticed.
+
+`COMMIT_HASH` may be given bare (`-DCOMMIT_HASH=<sha>`) or with embedded
+quotes as AppVeyor does; both reach the code as a string.
+
 ## Build options
 
 | Option | Default | Meaning |
@@ -199,6 +253,7 @@ is enforced by the `tst_no_widgets_dependency` test, not merely documented.
 | `PEBEAR_MIN_OS_VERSION` | *(empty)* | lowest OS version this build supports |
 | `PEBEAR_FORK_PATCH` | `0` | the fork's number on top of the release: `3` makes this build `0.7.2-p003` |
 | `PEBEAR_UPDATE_REPOSITORY` | *(empty)* | GitHub repository whose releases are offered, `owner/name`; empty means `hasherezade/pe-bear` |
+| `COMMIT_HASH` | *(empty)* | the commit, shown in the About box, carried as `PEBEAR_BUILD_ID` and in `pe-bear-build.json` |
 
 The fork numbers its own builds on top of the upstream release: `0.7.2-p001`,
 `0.7.2-p002`, ... They sort after the release they are built on and before

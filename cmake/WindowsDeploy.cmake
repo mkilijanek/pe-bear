@@ -162,6 +162,12 @@ list(APPEND _deploy_commands
 )
 
 set(_deploy_depends ${PROJECT_NAME})
+if(PEBEAR_BUILD_MANIFEST)
+	list(APPEND _deploy_commands
+		COMMAND ${CMAKE_COMMAND} -E copy_if_different
+			"${PEBEAR_BUILD_MANIFEST}" "${_deploy_dir}/pe-bear-build.json"
+	)
+endif()
 if(TARGET pe-bear-updater)
 	list(APPEND _deploy_depends pe-bear-updater)
 	list(APPEND _deploy_commands
