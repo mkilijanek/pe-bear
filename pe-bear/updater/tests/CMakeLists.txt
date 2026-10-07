@@ -77,3 +77,19 @@ if(UNIX)
 			-P ${CMAKE_CURRENT_SOURCE_DIR}/check_no_widgets.cmake
 	)
 endif()
+
+# The real thing on Linux: PE-bear and pe-bear-updater as built, a tar.xz
+# package, the helper started from inside the installation it replaces, the
+# startup handshake with the new build, the journal. This is the validation
+# behind "Linux tar.xz is supported"; the unit suite above fakes every one of
+# those boundaries. Linux only: a macOS bundle has no installer yet, and the
+# Windows side is validated on a real host (see #5, #27).
+# (PE-bear itself is defined after this directory; its generator expression
+# is resolved at generate time, when it exists.)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND TARGET pe-bear-updater)
+	add_test(NAME tst_e2e_linux_tarxz
+		COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/e2e_linux_tarxz.sh
+			$<TARGET_FILE:PE-bear> $<TARGET_FILE:pe-bear-updater>
+	)
+	set_tests_properties(tst_e2e_linux_tarxz PROPERTIES TIMEOUT 300)
+endif()

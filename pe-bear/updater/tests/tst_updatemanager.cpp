@@ -178,6 +178,7 @@ private slots:
 	void reachesReadyToInstallAfterVerification();
 	void deletesAPackageThatFailsVerification();
 	void reportsAManagedInstallationAndStopsThere();
+	void anAppImageBuildIsToldAboutTheReleaseButNotOffered();
 	void reportsWhenNoPackageFitsThisBuild();
 	void reportsAmbiguityRatherThanGuessing();
 	void survivesANetworkFailureWithoutBlockingAnything();
@@ -398,6 +399,35 @@ void TestUpdateManager::reportsAManagedInstallationAndStopsThere()
 	QVERIFY2(m_downloader->startCount() == 0, "a managed installation started a download");
 	/* The user is still told which version exists. */
 	QCOMPARE(m_manager->candidate().release.version.toString(), QString("0.7.3"));
+}
+
+void TestUpdateManager::anAppImageBuildIsToldAboutTheReleaseButNotOffered()
+{
+	/* The build is an AppImage with the default installer set, i.e. none:
+	   the matching asset is found and shown, nothing is downloaded, and the
+	   state is the one that tells the user to update by hand. */
+	BuildProfile profile;
+	profile.setPlatform(PlatformLinux);
+	profile.setArchitecture(ArchX64);
+	profile.setQtMajor(6);
+	profile.setPackageType(PackageLinuxAppImage);
+	m_manager->setBuildProfile(profile);
+	m_manager->setInstallablePackageTypes(AssetSelector::defaultInstallablePackageTypes(profile));
+
+	m_source->setRelease(makeRelease(QLatin1String(NEWER_TAG), QByteArray("image bytes"),
+		QLatin1String("PE-bear_0.7.3_qt6_x86_64_linux.AppImage")));
+	QSignalSpy errors(m_manager, SIGNAL(errorOccurred(int, QString)));
+	m_manager->checkForUpdates(true);
+	QVERIFY(errors.wait(2000));
+
+	QCOMPARE(m_manager->state(), StateManagedInstallation);
+	QCOMPARE(m_manager->lastError(), ErrorInstallerUnavailable);
+	QVERIFY(m_manager->candidate().release.isValid());
+	QCOMPARE(m_manager->candidate().release.version.toString(), QString("0.7.3"));
+	QCOMPARE(m_manager->candidate().asset.name, QString("PE-bear_0.7.3_qt6_x86_64_linux.AppImage"));
+	QVERIFY(!m_manager->canDownload());
+	QVERIFY(!m_manager->canInstall());
+	QCOMPARE(m_downloader->startCount(), 0);
 }
 
 void TestUpdateManager::reportsWhenNoPackageFitsThisBuild()
