@@ -32,6 +32,7 @@ set(updater_tests
 	tst_recovery
 	tst_helperresult
 	tst_helperrelocation
+	tst_buildmanifest
 )
 
 foreach(test_name ${updater_tests})
@@ -50,7 +51,8 @@ foreach(test_name ${updater_tests})
 	)
 	# the checked-in GitHub API fixture, located without a runtime search
 	target_compile_definitions(${test_name} PRIVATE
-		FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data")
+		FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data"
+		PEBEAR_BUILD_MANIFEST_PATH="${PEBEAR_BUILD_MANIFEST}")
 	add_test(NAME ${test_name} COMMAND ${test_name})
 	# QStandardPaths must not write into the developer's real config
 	set_tests_properties(${test_name} PROPERTIES
@@ -92,4 +94,11 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND TARGET pe-bear-updater)
 			$<TARGET_FILE:PE-bear> $<TARGET_FILE:pe-bear-updater>
 	)
 	set_tests_properties(tst_e2e_linux_tarxz PROPERTIES TIMEOUT 300)
+	# And the other half of the contract: a new build that does not answer
+	# the handshake is rolled back and the installation is what it was.
+	add_test(NAME tst_e2e_linux_rollback
+		COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/e2e_linux_rollback.sh
+			$<TARGET_FILE:PE-bear> $<TARGET_FILE:pe-bear-updater>
+	)
+	set_tests_properties(tst_e2e_linux_rollback PROPERTIES TIMEOUT 400)
 endif()

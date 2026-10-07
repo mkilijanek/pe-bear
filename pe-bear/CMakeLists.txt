@@ -357,7 +357,18 @@ IF (WIN32)
 	ENDIF()
 ENDIF()
 
-add_definitions(-DCOMMIT_HASH=${COMMIT_HASH})
+# COMMIT_HASH reaches the code as a string literal. AppVeyor passes it with
+# the quotes already embedded ("\"<sha>\""); a plain -DCOMMIT_HASH=<sha> used
+# to reach the compiler bare, where a hash beginning with a digit is an
+# ill-formed numeric literal. Both spellings are accepted: the quotes are
+# stripped, and PEBEAR_COMMIT carries the bare value for anything else that
+# needs it (the build manifest, the updater's build id).
+string(REPLACE "\"" "" PEBEAR_COMMIT "${COMMIT_HASH}")
+if(PEBEAR_COMMIT)
+	add_definitions(-DCOMMIT_HASH="${PEBEAR_COMMIT}")
+else()
+	add_definitions(-DCOMMIT_HASH=${COMMIT_HASH})
+endif()
 
 # The fork's builds are numbered on top of the upstream release: 0.7.2-p001,
 # 0.7.2-p002, ... (see rebear_ver_short.h). 0 keeps the plain upstream version.
