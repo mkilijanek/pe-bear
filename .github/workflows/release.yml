@@ -126,7 +126,7 @@ jobs:
         shell: pwsh
         run: |
           $name = "PE-bear_${{ needs.version.outputs.version }}_qt6_x64_win_vs22.zip"
-          python - $name @'
+          $code = @'
           import os, sys, zipfile
           name = sys.argv[1]; root = "deploy"
           with zipfile.ZipFile(name, "w", zipfile.ZIP_DEFLATED) as z:
@@ -137,6 +137,8 @@ jobs:
                       z.write(p, os.path.relpath(p, root).replace(os.sep, "/"))
           print(name, os.path.getsize(name), "bytes")
           '@
+          $code | python - $name
+          if ($LASTEXITCODE -ne 0) { throw "zip failed" }
           New-Item -ItemType Directory -Force out | Out-Null
           Move-Item $name out/
           (Get-FileHash "out/$name" -Algorithm SHA256).Hash.ToLower() + "  $name" | Out-File -Encoding ascii "out/$name.sha256"
