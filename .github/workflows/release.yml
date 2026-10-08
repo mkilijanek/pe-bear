@@ -141,7 +141,10 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "zip failed" }
           New-Item -ItemType Directory -Force out | Out-Null
           Move-Item $name out/
-          (Get-FileHash "out/$name" -Algorithm SHA256).Hash.ToLower() + "  $name" | Out-File -Encoding ascii "out/$name.sha256"
+          # Not Out-File: it writes CRLF, and a CR on the end of the asset name
+          # is what the second run of this workflow tripped over.
+          $line = (Get-FileHash "out/$name" -Algorithm SHA256).Hash.ToLower() + "  $name`n"
+          [IO.File]::WriteAllText("$PWD/out/$name.sha256", $line, (New-Object Text.ASCIIEncoding))
           Get-Content "out/$name.sha256"
       - uses: actions/upload-artifact@v4
         with:
@@ -229,6 +232,8 @@ jobs:
           mkdir -p release
           find artifacts -type f \( -name '*.zip' -o -name '*.tar.xz' -o -name '*.sha256' \) -exec mv {} release/ \;
           cd release
+          # Whatever wrote them: one digest line per file, LF-terminated.
+          sed -i 's/\r$//' *.sha256
           for a in *.zip *.tar.xz; do
             [[ "$a" =~ ^PE-bear_[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?(-p[0-9]{3,})?_qt[0-9]+_(x64|x86|arm64)_(win|linux|macos)(_vs[0-9]+)?\.(zip|tar\.xz)$ ]] \
               || { echo "::error::asset name '$a' does not fit the grammar"; exit 1; }
