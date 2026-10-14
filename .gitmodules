@@ -1,9 +1,16 @@
+# capstone stays on upstream on purpose: the pinned commit (8f917b9,
+# 6.0.0-Alpha10-45) is on capstone's v6 line, which renamed CS_ARCH_ARM64 to
+# CS_ARCH_AARCH64 and is what disasm/ is written against. The fork of
+# capstone predates 5.0 and does not contain that commit, so pointing the
+# submodule at it would break the build.
 [submodule "capstone"]
 	path = capstone
 	url = https://github.com/capstone-engine/capstone
+# bearparser and sig_finder come from this project's own forks so that fixes
+# made there reach the builds; the pinned commits are on the forks' master.
 [submodule "bearparser"]
 	path = bearparser
-	url = https://github.com/hasherezade/bearparser
+	url = https://github.com/mkilijanek/bearparser
 [submodule "sig_finder"]
 	path = sig_finder
-	url = https://github.com/hasherezade/sig_finder.git
+	url = https://github.com/mkilijanek/sig_finder.git
