@@ -20,6 +20,7 @@
 #include "gui/DosHdrTableModel.h"
 #include "gui/PackersTableModel.h"
 #include "base/MainSettings.h"
+#include "gui/pe_models/ImportsTreeModel.h"
 #include "gui/pe_models/ExceptionTreeModel.h"
 
 namespace {
@@ -143,6 +144,8 @@ private slots:
 	void modelsReportNoNegativeCounts_data();
 	void modelsReportNoNegativeCounts();
 
+	void renamingAnImportStaysInsideTheOldName_data();
+	void renamingAnImportStaysInsideTheOldName();
 	void exceptionModelShowsOnePageAtATime();
 	void exceptionModelStaysWithinRangeWhenThePageSizeChanges();
 	void exceptionModelWithFewRecordsIsASinglePage();
@@ -387,6 +390,72 @@ void TestPeModels::flatModelsShouldNotClaimChildren()
 		.arg(entry.name).arg(childRows)));
 
 	delete model;
+}
+
+namespace {
+
+	/** Exposes the protected column id of the library name. */
+	class NameColumnImports : public ImportsTreeModel
+	{
+	public:
+		explicit NameColumnImports(PeHandler *h) : ImportsTreeModel(h, NULL) {}
+		int nameColumn() const { return NAME; }
+	};
+
+}; // namespace
+
+void TestPeModels::renamingAnImportStaysInsideTheOldName_data()
+{
+	QTest::addColumn<QString>("newName");
+	QTest::addColumn<bool>("accepted");
+
+	/* The fixture's library is "TEST.dll" (8 characters). */
+	QTest::newRow("shorter")      << "A.dll"                     << true;
+	QTest::newRow("same length")  << "TEST.dlX"                  << true;
+	QTest::newRow("one longer")   << "TEST2.dll"                 << false;
+	QTest::newRow("much longer")  << "AVeryLongLibraryName.dll"  << false;
+}
+
+void TestPeModels::renamingAnImportStaysInsideTheOldName()
+{
+	QFETCH(QString, newName);
+	QFETCH(bool, accepted);
+
+	minimal_pe::Options options;
+	options.addImports = true;
+	PeFixture fixture(options);
+	QVERIFY2(fixture.isValid(), qPrintable(fixture.error()));
+
+	/* "TEST.dll" is at raw 0x220 and its terminator at 0x228. Whatever follows
+	   a name in a real image belongs to something else, so mark the bytes right
+	   behind the terminator and check that no rename reaches them. */
+	const int nameOffset = 0x220;
+	const int markerOffset = 0x229;
+	const int markerSize = 7;
+	BYTE *marker = fixture.pe()->getContentAt(markerOffset, markerSize, Executable::RAW);
+	QVERIFY(marker != NULL);
+	::memset(marker, 0xAA, markerSize);
+	const QByteArray before(reinterpret_cast<const char*>(
+		fixture.pe()->getContentAt(0x200, 0x80, Executable::RAW)), 0x80);
+
+	NameColumnImports model(fixture.handler());
+	const QModelIndex idx = model.index(0, model.nameColumn(), QModelIndex());
+	QVERIFY(idx.isValid());
+
+	QCOMPARE(model.setData(idx, newName, Qt::EditRole), accepted);
+
+	const QByteArray after(reinterpret_cast<const char*>(
+		fixture.pe()->getContentAt(0x200, 0x80, Executable::RAW)), 0x80);
+	for (int i = 0; i < markerSize; i++) {
+		QVERIFY2(static_cast<unsigned char>(after.at(markerOffset - 0x200 + i)) == 0xAA,
+			qPrintable(QString("byte %1 behind the old name was overwritten").arg(i)));
+	}
+	if (accepted) {
+		const QByteArray written(after.constData() + (nameOffset - 0x200));
+		QCOMPARE(QString::fromLatin1(written), newName);
+	} else {
+		QCOMPARE(after, before); /* a refused rename changes nothing */
+	}
 }
 
 namespace {
