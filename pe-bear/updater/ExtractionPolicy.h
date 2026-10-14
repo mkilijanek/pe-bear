@@ -33,6 +33,7 @@ public:
 		TrailingDotOrSpace,     /* "a." and "a " collide with "a" on Windows */
 		ReservedWindowsName,    /* CON, PRN, AUX, NUL, COM1..9, LPT1..9 */
 		ControlCharacterInPath,
+		AlternateStreamInPath,  /* "name:stream" or "name::$DATA" on NTFS */
 		PathTooLong,
 		TooManyPathComponents,
 		UnsupportedEntryKind,   /* device, fifo, socket, ... */
