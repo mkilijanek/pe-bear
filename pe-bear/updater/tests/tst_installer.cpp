@@ -9,6 +9,8 @@
  */
 #include <QtTest>
 #include "../Installer.h"
+#include "../DirectoryInstaller.h"
+#include "../Recovery.h"
 #include "FakeFileSystem.h"
 
 using namespace pe_bear::updater;
@@ -31,6 +33,9 @@ namespace {
 		void failStaging() { m_stageOk = false; }
 		void failLayout() { m_layoutOk = false; }
 		void failActivate() { m_activateOk = false; }
+		/** Copies whatever is in @p dir when activate() is entered. */
+		void snapshotOnActivate(const QString &dir) { m_snapshotDir = dir; }
+		QMap<QString, QByteArray> snapshot() const { return m_snapshot; }
 
 		QStringList calls() const { return m_calls; }
 
@@ -70,6 +75,12 @@ namespace {
 			QList<TransactionOp> *ops)
 		{
 			m_calls << QLatin1String("activate");
+			if (!m_snapshotDir.isEmpty()) {
+				foreach (const QString &name, m_fs->listDir(m_snapshotDir)) {
+					const QString path = m_snapshotDir + QLatin1Char('/') + name;
+					m_snapshot.insert(path, m_fs->readFile(path));
+				}
+			}
 			if (!m_activateOk) { m_error = QLatin1String("activate refused"); return false; }
 			if (!m_fs->movePath(stagingDir, targetDir)) {
 				m_error = QLatin1String("move failed");
@@ -90,8 +101,30 @@ namespace {
 		FakeFileSystem *m_fs;
 		bool m_canInstall, m_stageOk, m_layoutOk, m_activateOk;
 		QString m_why;
+		QString m_snapshotDir;
+		QMap<QString, QByteArray> m_snapshot;
 		mutable QString m_error;
 		mutable QStringList m_calls;
+	};
+
+	/** An archive described entirely in memory. */
+	class FakeArchiveReader : public IArchiveReader
+	{
+	public:
+		void addFile(const QString &path, const QByteArray &body)
+		{
+			m_entries.append(ArchiveEntry(path, ArchiveEntry::KindFile, body.size(), body.size()));
+			m_bodies.insert(path, body);
+		}
+		virtual bool open(const QString &) { return true; }
+		virtual void close() {}
+		virtual QList<ArchiveEntry> entries() const { return m_entries; }
+		virtual QByteArray readEntry(const QString &path) { return m_bodies.value(path); }
+		virtual QString lastError() const { return QLatin1String("fake reader"); }
+
+	private:
+		QList<ArchiveEntry> m_entries;
+		QMap<QString, QByteArray> m_bodies;
 	};
 
 	VerifiedUpdate update()
@@ -151,6 +184,8 @@ private slots:
 	void aFailedLayoutCheckLeavesTheInstallationIntact();
 	void aFailedActivationRestoresTheInstallation();
 	void anIncompleteRollbackIsReportedDistinctly();
+	void aCopyFallbackThatFailsHalfwayRestoresTheInstallation();
+	void activationIsRecordedBeforeItHappens();
 
 	void theRecordIsWrittenBeforeTheStagingRootExists();
 	void aRootThatCannotBeCreatedClosesTheRecord();
@@ -403,6 +438,79 @@ void TestInstaller::rollBackAfterActivationRestoresTheOldBuild()
 	QCOMPARE(inst.prepareAndActivate(update()), Installer::AwaitingValidation);
 	QCOMPARE(inst.rollBack(QLatin1String("the new build did not confirm itself")),
 		Installer::FailedRolledBack);
+	QCOMPARE(fs.contentOf(QLatin1String("/opt/pe-bear/PE-bear")), QByteArray("old-binary"));
+	QCOMPARE(fs.contentOf(QLatin1String("/opt/pe-bear/SIG.txt")), QByteArray("old-sigs"));
+}
+
+void TestInstaller::aCopyFallbackThatFailsHalfwayRestoresTheInstallation()
+{
+	/* The real installer, on the path a cross-volume update takes: the move
+	   of the staged build into place is refused, the copy fallback creates
+	   the target and dies on its second file. What it created is the only
+	   thing standing between the backup and its old place, so unless the
+	   transaction knows about it the restore cannot happen. */
+	FakeFileSystem fs;
+	installTarget(fs);
+	/* DirectoryInstaller looks for the platform's own name: PE-bear.exe on
+	   Windows, which installTarget() does not lay down. */
+	const QString oldExe = QLatin1String(TARGET) + QLatin1Char('/')
+		+ DirectoryInstaller::applicationFileName();
+	fs.addFile(oldExe, QByteArray("old-binary"));
+	fs.setWritableDefault(true);
+	fs.addFile(QLatin1String("/var/pe-bear-updates/downloads/x.zip"), QByteArray("package"));
+
+	FakeArchiveReader reader;
+	reader.addFile(DirectoryInstaller::applicationFileName(), QByteArray("new-binary"));
+	reader.addFile(QLatin1String("SIG.txt"), QByteArray("new-sigs"));
+	DirectoryInstaller platform(&fs, &reader);
+
+	TransactionJournal journal(&fs, paths().transactionsDir());
+	Installer inst(&fs, &platform, &journal, paths());
+	inst.setInstallation(portableAt(QLatin1String(TARGET)));
+
+	/* movePath #1 is the backup, #2 the activation; copyFile #2 is the
+	   second file of the fallback. */
+	fs.failOnCall(QLatin1String("movePath"), 2);
+	fs.failOnCall(QLatin1String("copyFile"), 2);
+
+	QCOMPARE(inst.prepareAndActivate(update()), Installer::FailedRolledBack);
+	QCOMPARE(inst.transaction().state(), TxRolledBack);
+	QCOMPARE(fs.contentOf(oldExe), QByteArray("old-binary"));
+	QCOMPARE(fs.contentOf(QLatin1String("/opt/pe-bear/SIG.txt")), QByteArray("old-sigs"));
+	QVERIFY(!fs.exists(inst.transaction().record().backupDir));
+}
+
+void TestInstaller::activationIsRecordedBeforeItHappens()
+{
+	/* A helper that dies after the new build is in place but before the
+	   activation is recorded leaves the journal exactly as it was when
+	   activate() was entered. Recovery then has to be able to put the old
+	   build back from that record alone. */
+	FakeFileSystem fs;
+	installTarget(fs);
+	FakePlatform platform(&fs);
+	platform.snapshotOnActivate(paths().transactionsDir());
+	TransactionJournal journal(&fs, paths().transactionsDir());
+	Installer inst(&fs, &platform, &journal, paths());
+	inst.setInstallation(portableAt(QLatin1String(TARGET)));
+
+	QCOMPARE(inst.prepareAndActivate(update()), Installer::AwaitingValidation);
+	QCOMPARE(fs.contentOf(QLatin1String("/opt/pe-bear/PE-bear")), QByteArray("new-binary"));
+
+	/* the crash: the journal goes back to what it said during activate() */
+	const QMap<QString, QByteArray> before = platform.snapshot();
+	QVERIFY(!before.isEmpty());
+	QMap<QString, QByteArray>::const_iterator itr;
+	for (itr = before.begin(); itr != before.end(); ++itr) {
+		QVERIFY(fs.writeFile(itr.key(), itr.value()));
+	}
+
+	Recovery recovery(&fs, &journal);
+	recovery.setNow(QDateTime::currentDateTimeUtc().addDays(1));
+	const QList<Recovery::Outcome> outcomes = recovery.run();
+	QCOMPARE(outcomes.size(), 1);
+	QVERIFY2(outcomes.first().disposition == Recovery::RolledBack,
+		qPrintable(outcomes.first().note));
 	QCOMPARE(fs.contentOf(QLatin1String("/opt/pe-bear/PE-bear")), QByteArray("old-binary"));
 	QCOMPARE(fs.contentOf(QLatin1String("/opt/pe-bear/SIG.txt")), QByteArray("old-sigs"));
 }
