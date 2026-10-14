@@ -22,6 +22,7 @@ Everything runs offline and headless, in well under a second.
 | `tst_stringscollection` | the strings store, including wide-string byte sizes |
 | `tst_treemodel` | `TreeItem` tree bookkeeping and `TreeModel`, with a contract check |
 | `tst_pemodels` | every concrete PE view, under `QAbstractItemModelTester` |
+| `tst_imphash` | the imphash matches pefile's, ASCII and non-ASCII names |
 
 ## Fixtures are synthesised, not committed
 
