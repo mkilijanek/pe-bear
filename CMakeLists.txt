@@ -51,7 +51,6 @@ option(CAPSTONE_ARM64_SUPPORT "ARM64 support" ON)
 option(CAPSTONE_MIPS_SUPPORT "MIPS support" OFF)
 option(CAPSTONE_PPC_SUPPORT "PowerPC support" OFF)
 option(CAPSTONE_SPARC_SUPPORT "Sparc support" OFF)
-option(CAPSTONE_SYSZ_SUPPORT "SystemZ support" OFF)
 option(CAPSTONE_XCORE_SUPPORT "XCore support" OFF)
 option(CAPSTONE_TRICORE_SUPPORT "TriCore support" OFF)
 
