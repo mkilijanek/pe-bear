@@ -108,6 +108,7 @@ bool LibArchiveReader::scan()
 	m_entries.clear();
 	struct archive_entry *entry = NULL;
 	int scanned = 0;
+	qint64 declaredTotal = 0;
 
 	while (true) {
 		const int r = archive_read_next_header(a, &entry);
@@ -136,6 +137,18 @@ bool LibArchiveReader::scan()
 		out.kind = kindOf(entry);
 		out.uncompressedSize = archive_entry_size_is_set(entry)
 			? qint64(archive_entry_size(entry)) : -1;
+
+		/* Judged before the body is skipped: skipping decompresses it, and
+		   the extraction policy only sees the entries after this loop ends.
+		   A few hundred kilobytes of xz can declare gigabytes of zeros. */
+		if (out.kind == ArchiveEntry::KindFile && out.uncompressedSize > 0) {
+			declaredTotal += out.uncompressedSize;
+			if (out.uncompressedSize > MAX_ENTRY_BYTES || declaredTotal > MAX_TOTAL_BYTES) {
+				archive_read_free(a);
+				m_entries.clear();
+				return fail(QLatin1String("the archive declares entries larger than will be read"));
+			}
+		}
 		/* Per-entry compressed size is not exposed portably; the policy treats
 		   a non-positive value as "no ratio to judge", which is honest. */
 		out.compressedSize = 0;
