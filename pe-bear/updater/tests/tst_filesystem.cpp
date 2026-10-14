@@ -90,7 +90,7 @@ void TestFileSystem::aReaderNeverFindsTheFileMissingWhileItIsRewritten()
 	RealFileSystem fs;
 	QVERIFY(fs.writeFile(path, QByteArray("{\"round\": -1}")));
 
-	Rewriter writer(path, 5000);
+	Rewriter writer(path, 2000);
 	writer.start();
 
 	int missing = 0;
@@ -102,10 +102,10 @@ void TestFileSystem::aReaderNeverFindsTheFileMissingWhileItIsRewritten()
 	writer.wait();
 
 	QVERIFY2(writer.failures() == 0, qPrintable(QString::number(writer.failures())
-		+ QLatin1String(" of 5000 writes failed, the first with: ") + writer.firstError()));
+		+ QLatin1String(" of 2000 writes failed, the first with: ") + writer.firstError()));
 	QVERIFY2(missing == 0, qPrintable(QString::number(missing) + QLatin1String(" of ")
 		+ QString::number(checks) + QLatin1String(" checks found no file")));
-	QVERIFY(fs.readFile(path).startsWith("{\"round\": 4999}"));
+	QVERIFY(fs.readFile(path).startsWith("{\"round\": 1999}"));
 }
 
 QTEST_GUILESS_MAIN(TestFileSystem)

@@ -1,6 +1,8 @@
 #include "FileSystem.h"
 #include "UpdatePaths.h"
 
+#include <QThread>
+
 using namespace pe_bear::updater;
 
 QString pe_bear::updater::parentDirectoryOf(const QString &path)
@@ -171,18 +173,31 @@ bool RealFileSystem::writeFile(const QString &path, const QByteArray &data)
 	   holding the old file open on Windows is enough -- the sibling was
 	   deleted too, and the record was gone for good. A failed write here
 	   leaves the previous content untouched. */
-	QSaveFile f(path);
-	if (!f.open(QIODevice::WriteOnly)) {
-		return fail(QLatin1String("could not open ") + QDir::toNativeSeparators(path)
-			+ QLatin1String(": ") + f.errorString());
-	}
-	if (f.write(data) != data.size()) {
-		/* not committed: the destructor discards the sibling */
-		return fail(QLatin1String("short write to ") + QDir::toNativeSeparators(path));
-	}
-	if (!f.commit()) {
-		return fail(QLatin1String("could not place ") + QDir::toNativeSeparators(path)
-			+ QLatin1String(": ") + f.errorString());
+	/* On Windows the replace is refused ("Access is denied") while anyone
+	   else has the target open: QFile opens without FILE_SHARE_DELETE, so a
+	   reader of the journal is enough, and on the CI runner a loop of mere
+	   existence checks refused about a third of the replaces. Such a hold is
+	   brief, so the whole write is tried again for a short, bounded while
+	   (about a third of a second in all) before it counts as failed;
+	   QSaveFile has already discarded its sibling, so a retry starts from
+	   scratch and the previous content stays as it was. */
+	const int attempts = 20;
+	for (int attempt = 0; ; attempt++) {
+		QSaveFile f(path);
+		if (!f.open(QIODevice::WriteOnly)) {
+			return fail(QLatin1String("could not open ") + QDir::toNativeSeparators(path)
+				+ QLatin1String(": ") + f.errorString());
+		}
+		if (f.write(data) != data.size()) {
+			/* not committed: the destructor discards the sibling */
+			return fail(QLatin1String("short write to ") + QDir::toNativeSeparators(path));
+		}
+		if (f.commit()) break;
+		if (attempt + 1 >= attempts) {
+			return fail(QLatin1String("could not place ") + QDir::toNativeSeparators(path)
+				+ QLatin1String(": ") + f.errorString());
+		}
+		QThread::msleep(qMin(1 + 2 * attempt, 25));
 	}
 	UpdatePaths::restrictToOwner(path);
 	return true;
