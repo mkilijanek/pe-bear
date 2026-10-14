@@ -164,6 +164,22 @@ bool Transaction::backup(const QString &backupDir)
 	return setState(TxBackedUp);
 }
 
+bool Transaction::markActivating(const QString &targetDir)
+{
+	if (m_record.state != TxBackedUp) {
+		return refuse(QLatin1String("activation requires BackedUp, not ")
+			+ transactionStateToString(m_record.state));
+	}
+	if (targetDir.isEmpty()) return refuse(QLatin1String("no activation target"));
+	m_record.ops.append(TransactionOp(TransactionOp::OpCreatedDir, targetDir));
+	if (!m_journal->write(m_record)) {
+		m_record.ops.removeLast();
+		return refuse(QLatin1String("could not record the activation target: ")
+			+ m_journal->lastError());
+	}
+	return true;
+}
+
 bool Transaction::markActivated(const QList<TransactionOp> &activationOps)
 {
 	if (m_record.state != TxBackedUp) {

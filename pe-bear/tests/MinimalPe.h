@@ -26,7 +26,7 @@ namespace minimal_pe {
 	{
 		Options()
 			: is64bit(false), sectionCount(1), imageSize(0x2000),
-			entryPoint(0x1000), addImports(false) {}
+			entryPoint(0x1000), addImports(false), exceptionEntries(0) {}
 
 		bool is64bit;
 		int sectionCount;
@@ -34,6 +34,10 @@ namespace minimal_pe {
 		quint32 entryPoint;
 		/** Adds a one-entry import directory, so import views have content. */
 		bool addImports;
+		/** Adds an exception directory of this many 12-byte RUNTIME_FUNCTION
+		 *  records (x86/x64 layout), starting at raw offset 0x300. The image
+		 *  and its only section grow to hold them; with 0 nothing changes. */
+		int exceptionEntries;
 	};
 
 	/** A PE32 or PE32+ image. Never fails; the caller checks acceptance. */

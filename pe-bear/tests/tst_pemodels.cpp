@@ -21,6 +21,7 @@
 #include "gui/PackersTableModel.h"
 #include "base/MainSettings.h"
 #include "gui/pe_models/ImportsTreeModel.h"
+#include "gui/pe_models/ExceptionTreeModel.h"
 
 namespace {
 
@@ -145,6 +146,9 @@ private slots:
 
 	void renamingAnImportStaysInsideTheOldName_data();
 	void renamingAnImportStaysInsideTheOldName();
+	void exceptionModelShowsOnePageAtATime();
+	void exceptionModelStaysWithinRangeWhenThePageSizeChanges();
+	void exceptionModelWithFewRecordsIsASinglePage();
 
 	void headerViewsExposeTheirFields();
 	void sectionModelReportsTheSectionCount();
@@ -452,6 +456,105 @@ void TestPeModels::renamingAnImportStaysInsideTheOldName()
 	} else {
 		QCOMPARE(after, before); /* a refused rename changes nothing */
 	}
+}
+
+namespace {
+
+	/** Exposes the protected column id of the record offset. */
+	class OffsetColumnExceptions : public ExceptionTreeModel
+	{
+	public:
+		explicit OffsetColumnExceptions(PeHandler *h) : ExceptionTreeModel(h, NULL) {}
+		int offsetColumn() const { return OFFSET; }
+	};
+
+	/* the records start at raw 0x300 and are 12 bytes each */
+	QString recordOffset(int record) { return QString::number(0x300 + record * 12, 16); }
+
+}; // namespace
+
+void TestPeModels::exceptionModelShowsOnePageAtATime()
+{
+	minimal_pe::Options options;
+	options.exceptionEntries = 20;
+	PeFixture fixture(options);
+	QVERIFY2(fixture.isValid(), qPrintable(fixture.error()));
+
+	OffsetColumnExceptions model(fixture.handler());
+	QCOMPARE(model.totalCount(), 20);
+
+	model.setMaxPerPage(8);
+	QCOMPARE(model.pagesCount(), 3);
+
+	QSignalSpy paging(&model, SIGNAL(pagingChanged()));
+	const int expectedRows[] = { 8, 8, 4 };
+	for (int page = 0; page < 3; page++) {
+		model.setPage(page);
+		QCOMPARE(model.page(), page);
+		QCOMPARE(model.rowCount(QModelIndex()), expectedRows[page]);
+
+		/* the first row of a page is the first record of that page, not record 0 */
+		const QModelIndex first = model.index(0, model.offsetColumn(), QModelIndex());
+		QCOMPARE(model.data(first, Qt::DisplayRole).toString(), recordOffset(page * 8));
+		/* and so is the last */
+		const int lastRow = expectedRows[page] - 1;
+		const QModelIndex last = model.index(lastRow, model.offsetColumn(), QModelIndex());
+		QCOMPARE(model.data(last, Qt::DisplayRole).toString(), recordOffset(page * 8 + lastRow));
+	}
+	QVERIFY(paging.count() >= 2);
+
+	/* a page past the end is clamped to the last one rather than shown empty */
+	model.setPage(99);
+	QCOMPARE(model.page(), 2);
+	QCOMPARE(model.rowCount(QModelIndex()), 4);
+}
+
+void TestPeModels::exceptionModelStaysWithinRangeWhenThePageSizeChanges()
+{
+	minimal_pe::Options options;
+	options.exceptionEntries = 20;
+	PeFixture fixture(options);
+	QVERIFY2(fixture.isValid(), qPrintable(fixture.error()));
+
+	OffsetColumnExceptions model(fixture.handler());
+	model.setMaxPerPage(4);
+	model.setPage(3);                       /* records 12..15 */
+	QCOMPARE(model.rowCount(QModelIndex()), 4);
+
+	/* larger pages: the record that was first on screen stays on screen */
+	model.setMaxPerPage(10);
+	QCOMPARE(model.page(), 1);              /* records 10..19 */
+	QCOMPARE(model.rowCount(QModelIndex()), 10);
+	const QModelIndex idx = model.index(2, model.offsetColumn(), QModelIndex());
+	QCOMPARE(model.data(idx, Qt::DisplayRole).toString(), recordOffset(12));
+
+	/* a size below one is not accepted as zero (which would divide by it) */
+	model.setMaxPerPage(0);
+	QVERIFY(model.maxPerPage() >= 1);
+	QVERIFY(model.pagesCount() >= 1);
+}
+
+void TestPeModels::exceptionModelWithFewRecordsIsASinglePage()
+{
+	/* the default page size is far larger than a typical directory, so the
+	   common case must look exactly as it did before paging existed */
+	minimal_pe::Options options;
+	options.exceptionEntries = 20;
+	PeFixture fixture(options);
+	QVERIFY2(fixture.isValid(), qPrintable(fixture.error()));
+
+	OffsetColumnExceptions model(fixture.handler());
+	QCOMPARE(model.maxPerPage(), int(ExceptionTreeModel::DEFAULT_PER_PAGE));
+	QCOMPARE(model.pagesCount(), 1);
+	QCOMPARE(model.rowCount(QModelIndex()), 20);
+
+	/* and an empty directory has no pages and no rows */
+	PeFixture bare;
+	QVERIFY2(bare.isValid(), qPrintable(bare.error()));
+	OffsetColumnExceptions none(bare.handler());
+	QCOMPARE(none.totalCount(), 0);
+	QCOMPARE(none.pagesCount(), 0);
+	QCOMPARE(none.rowCount(QModelIndex()), 0);
 }
 
 QTEST_MAIN(TestPeModels)

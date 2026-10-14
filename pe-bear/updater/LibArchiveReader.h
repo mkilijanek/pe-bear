@@ -33,6 +33,12 @@ public:
 	static const int MAX_ENTRIES_SCANNED = 100000;
 	/** Refuses to materialise a single entry larger than this. */
 	static const qint64 MAX_ENTRY_BYTES = Q_INT64_C(1024) * 1024 * 1024;
+	/** Refuses an archive whose entries declare more than this in all.
+	    Listing has to decompress every body (an xz stream cannot be seeked),
+	    so the declared sizes are also the cost of open(). Equal to the default
+	    ExtractionPolicy::Limits::maxTotalBytes, which is what a caller gets
+	    unless it asks for more. */
+	static const qint64 MAX_TOTAL_BYTES = Q_INT64_C(2) * 1024 * 1024 * 1024;
 
 	LibArchiveReader();
 	virtual ~LibArchiveReader();

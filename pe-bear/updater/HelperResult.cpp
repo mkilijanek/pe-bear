@@ -6,6 +6,8 @@
 namespace pe_bear {
 namespace updater {
 
+const int HelperResult::CURRENT_VERSION;
+
 QString HelperResult::fileName()
 {
 	return QLatin1String("last-result.json");
