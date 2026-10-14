@@ -115,6 +115,7 @@ set(pebear_tests
 	tst_stringscollection
 	tst_treemodel
 	tst_pemodels
+	tst_cdisasm
 )
 
 foreach(test_name ${pebear_tests})
