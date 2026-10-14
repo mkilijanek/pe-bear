@@ -3,6 +3,8 @@
 namespace pe_bear {
 namespace updater {
 
+const int Recovery::LIVE_WINDOW_SECONDS;
+
 QString Recovery::dispositionToString(Disposition d)
 {
 	switch (d) {

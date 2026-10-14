@@ -8,6 +8,13 @@
 namespace pe_bear {
 namespace updater {
 
+/* Out-of-class definitions: a test or caller that binds one of these to a
+   const reference (QCOMPARE, qMin) odr-uses it, and without a definition that
+   links only when the optimiser happens to fold the reference away. */
+const int HelperHandoff::CURRENT_VERSION;
+const int HelperHandoff::MAX_AGE_SECONDS;
+const int HelperHandoff::RUN_ID_HEX_LENGTH;
+
 namespace {
 
 	const char* KEY_VERSION      = "version";
