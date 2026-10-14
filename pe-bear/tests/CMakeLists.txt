@@ -42,6 +42,11 @@ set(deps_modification
 	${PB}/base/Modification.cpp
 )
 
+# pure logic, needs nothing but Qt Core
+set(deps_dumpfilename
+	${PB}/base/DumpFileName.cpp
+)
+
 set(deps_commenthandler
 	${PB}/base/CommentHandler.cpp
 )
@@ -115,6 +120,7 @@ set(pebear_tests
 	tst_stringscollection
 	tst_treemodel
 	tst_pemodels
+	tst_dumpfilename
 )
 
 foreach(test_name ${pebear_tests})
@@ -128,6 +134,8 @@ foreach(test_name ${pebear_tests})
 		set(test_deps ${deps_stringscollection})
 	elseif(test_name STREQUAL "tst_treemodel")
 		set(test_deps ${deps_treemodel})
+	elseif(test_name STREQUAL "tst_dumpfilename")
+		set(test_deps ${deps_dumpfilename})
 	elseif(test_name STREQUAL "tst_pemodels")
 		set(test_deps ${deps_pemodels})
 	else()
