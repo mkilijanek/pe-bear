@@ -72,9 +72,21 @@ public:
 	bool backup(const QString &backupDir);
 
 	/**
+	 * Records, before activation starts, that it is about to create
+	 * @p targetDir. Stays BackedUp.
+	 *
+	 * The platform layer reports its steps only once it returns, and by then
+	 * the target exists -- moved in or partly copied. A record without it
+	 * cannot be undone: the backup refuses to move back over a target that
+	 * is already present. Undoing this step removes whatever is at the
+	 * target, which in BackedUp can only be what activation put there.
+	 */
+	bool markActivating(const QString &targetDir);
+
+	/**
 	 * Records that activation happened. BackedUp -> Activated.
-	 * The move itself belongs to the platform layer; what this guarantees is
-	 * that it was written down first.
+	 * The move itself belongs to the platform layer; markActivating() is
+	 * what guarantees the target was written down before it.
 	 */
 	bool markActivated(const QList<TransactionOp> &activationOps);
 
