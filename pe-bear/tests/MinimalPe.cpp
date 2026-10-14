@@ -22,7 +22,14 @@ namespace {
 QByteArray minimal_pe::build(const Options &options)
 {
 	/* 0x600 leaves room for the headers plus one raw section */
-	const int imageBytes = 0x600;
+	const int exceptionRaw = 0x300;
+	const int exceptionBytes = qMax(0, options.exceptionEntries) * 12;
+	int imageBytes = 0x600;
+	if (exceptionBytes > 0) {
+		imageBytes = qMax(imageBytes, (exceptionRaw + exceptionBytes + 0x1FF) & ~0x1FF);
+	}
+	/* the first section covers everything after the headers */
+	const quint32 firstSectionRaw = quint32(imageBytes - 0x200 > 0x200 ? imageBytes - 0x200 : 0x200);
 	QByteArray image(imageBytes, '\0');
 	char *p = image.data();
 
@@ -67,7 +74,10 @@ QByteArray minimal_pe::build(const Options &options)
 	put16(p, oh + 0x28, 4);                                  /* MajorOSVersion */
 	put16(p, oh + 0x2C, 1);                                  /* MajorImageVersion */
 	put16(p, oh + 0x30, 4);                                  /* MajorSubsystemVersion */
-	put32(p, oh + 0x38, options.imageSize);                  /* SizeOfImage */
+	const quint32 imageSize = (exceptionBytes > 0)
+		? qMax(options.imageSize, quint32((0x1000 + firstSectionRaw + 0xFFF) & ~0xFFF) + 0x1000)
+		: options.imageSize;
+	put32(p, oh + 0x38, imageSize);                          /* SizeOfImage */
 	put32(p, oh + 0x3C, 0x200);                              /* SizeOfHeaders */
 	put16(p, oh + 0x44, 2);                                  /* Subsystem: GUI */
 
@@ -87,9 +97,10 @@ QByteArray minimal_pe::build(const Options &options)
 			: QByteArray(".sec") + QByteArray::number(i);
 		memcpy(p + sh, name.constData(), size_t(qMin(8, name.size())));
 
-		put32(p, sh + 0x08, 0x1000);                         /* VirtualSize */
+		const bool grown = (i == 0 && exceptionBytes > 0);
+		put32(p, sh + 0x08, grown ? firstSectionRaw : 0x1000);  /* VirtualSize */
 		put32(p, sh + 0x0C, quint32(0x1000 * (i + 1)));      /* VirtualAddress */
-		put32(p, sh + 0x10, 0x200);                          /* SizeOfRawData */
+		put32(p, sh + 0x10, grown ? firstSectionRaw : 0x200);   /* SizeOfRawData */
 		put32(p, sh + 0x14, 0x200);                          /* PointerToRawData */
 		put32(p, sh + 0x24, 0x60000020);                     /* CODE|EXECUTE|READ */
 	}
@@ -116,6 +127,18 @@ QByteArray minimal_pe::build(const Options &options)
 		put32(p, importsRaw + 0x50, importsRva + 0x60);
 		put16(p, importsRaw + 0x60, 0);                      /* Hint */
 		memcpy(p + importsRaw + 0x62, "TestFunc", 8);
+	}
+	if (exceptionBytes > 0) {
+		/* IMAGE_DIRECTORY_ENTRY_EXCEPTION is entry 3; the first section's
+		   RVA 0x1000 maps to raw 0x200, so raw 0x300 is RVA 0x1100 */
+		put32(p, dataDirOffset + 3 * 8, 0x1100);
+		put32(p, dataDirOffset + 3 * 8 + 4, quint32(exceptionBytes));
+		for (int i = 0; i < options.exceptionEntries; i++) {
+			const int at = exceptionRaw + i * 12;
+			put32(p, at + 0, quint32(0x1000 + i * 0x10));        /* BeginAddress */
+			put32(p, at + 4, quint32(0x1000 + i * 0x10 + 0x0F)); /* EndAddress */
+			put32(p, at + 8, 0x1000);                            /* UnwindInfoAddress */
+		}
 	}
 	return image;
 }
