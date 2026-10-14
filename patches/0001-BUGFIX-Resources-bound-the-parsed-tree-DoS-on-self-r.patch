@@ -1,0 +1,196 @@
+From f2677995a57f394af2e138a8701f5f4986025a15 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Wed, 14 Oct 2026 12:25:30 +0000
+Subject: [PATCH] [BUGFIX] Resources: bound the parsed tree (DoS on
+ self-referencing and overlapping directories)
+
+Since "Removed limit for resources to be parsed" the number of entries per
+directory is unbounded, and only the depth (MAX_DEPTH 5) limits the tree.
+A directory whose entries point back at itself (or at the top directory), or a
+chain of distinct directories whose N entries all point at the next one, makes
+the parsed tree grow as N^MAX_DEPTH. With N=100 the parser does not return and
+memory grows until the process is killed (hasherezade/pe-bear#77).
+
+Two bounds, neither of which limits a well-formed resource tree:
+
+1. Every directory is expanded at most once per tree (set of raw offsets held
+   by the top directory). This removes cycles and shared children.
+2. The tree has a budget of getRawSize() / sizeof(IMAGE_RESOURCE_DIRECTORY_ENTRY)
+   entries. In a well-formed tree every entry occupies its own bytes, so it cannot
+   be exceeded. It is needed because directories of a malformed file may overlap
+   (a directory header placed over the entries of another directory), so that
+   distinct offsets still share the same bytes as entries: (1) alone does not stop that.
+
+Both are reset by the top directory's wrap(), which is the only place
+a resource tree is rewrapped.
+
+Known behaviour change: a directory referenced by more than one entry is
+expanded only under the first one.
+
+Add tests/gen_rsrc_poc.py, which generates synthetic PE32 files for the three
+shapes (selfloop, chain, overlap). Command: `rsl` in bearcommander.
+- base (c18e939):          selfloop, chain: no result within 20 s
+- visited-set only:        overlap (20000 entries): no result within 30 s
+- this commit:             all three finish in < 0.1 s
+Output of `rsl` and `rstrings` on the 25 PE files of bearparser_tests is identical
+before and after (few of them have resources, so this is weak evidence for
+shared-directory cases).
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01U9wTxiurknTde1ofZfbj6C
+---
+ .../bearparser/pe/ResourceDirWrapper.h        | 26 ++++++++++-
+ parser/pe/ResourceDirWrapper.cpp              | 13 +++++-
+ tests/gen_rsrc_poc.py                         | 46 +++++++++++++++++++
+ 3 files changed, 82 insertions(+), 3 deletions(-)
+ create mode 100644 tests/gen_rsrc_poc.py
+
+diff --git a/parser/include/bearparser/pe/ResourceDirWrapper.h b/parser/include/bearparser/pe/ResourceDirWrapper.h
+index 8baf9fe3..27d7ac69 100644
+--- a/parser/include/bearparser/pe/ResourceDirWrapper.h
++++ b/parser/include/bearparser/pe/ResourceDirWrapper.h
+@@ -7,6 +7,7 @@
+ #include "rsrc/ResourceContentFactory.h"
+ 
+ #include <map>
++#include <set>
+ #include <vector>
+ 
+ 
+@@ -25,9 +26,9 @@ public:
+         FIELD_COUNTER
+     };
+ 
+-    ResourceDirWrapper(PEFile* pe, ResourcesAlbum *resAlbum = NULL, offset_t rawOffset = 0, long depth = 0, long topEntryId = TOP_ENTRY_ROOT)
++    ResourceDirWrapper(PEFile* pe, ResourcesAlbum *resAlbum = NULL, offset_t rawOffset = 0, long depth = 0, long topEntryId = TOP_ENTRY_ROOT, ResourceDirWrapper *rootDir = NULL)
+         : DataDirEntryWrapper(pe, pe::DIR_RESOURCE),
+-        rawOff(rawOffset), dirDepth(depth), album(resAlbum), topEntryID(topEntryId)
++        rawOff(rawOffset), dirDepth(depth), album(resAlbum), topEntryID(topEntryId), root(rootDir ? rootDir : this), entriesLeft(0)
+     { 
+         wrap();
+     }
+@@ -55,12 +56,33 @@ public:
+     IMAGE_RESOURCE_DIRECTORY* mainResourceDir();
+     ResourcesAlbum* getAlbumPtr() { return album; }
+ 
++    /* Registers the directory at the given raw offset as expanded in the tree
++     * this directory belongs to. Returns false if it was already expanded:
++     * a directory is parsed at most once, so entries that form cycles or share
++     * children do not make the tree grow exponentially. */
++    bool markExpanded(offset_t dirRawOffset) { return root->expandedDirs.insert(dirRawOffset).second; }
++
++    /* Takes one entry from the budget of the tree. Returns false when the budget is spent.
++     * The budget is the number of entries that fit in the file: in a well-formed tree
++     * every entry occupies its own bytes, but directories of a malformed file may overlap
++     * and reuse the same bytes as entries of many other directories. */
++    bool takeEntry()
++    {
++        if (root->entriesLeft == 0) return false;
++        root->entriesLeft--;
++        return true;
++    }
++    ResourceDirWrapper* getRoot() { return root; }
++
+ private:
+     IMAGE_RESOURCE_DIRECTORY* resourceDir();
+     offset_t rawOff;
+     long dirDepth;
+     ResourcesAlbum *album;
+     long topEntryID;
++    ResourceDirWrapper *root; // the top directory of this tree (this, for the top directory itself)
++    std::set<offset_t> expandedDirs; // used only in the root
++    size_t entriesLeft; // used only in the root
+ };
+ 
+ class ResourceEntryWrapper : public PENodeWrapper
+diff --git a/parser/pe/ResourceDirWrapper.cpp b/parser/pe/ResourceDirWrapper.cpp
+index 08c91c4a..5cbc4b9d 100644
+--- a/parser/pe/ResourceDirWrapper.cpp
++++ b/parser/pe/ResourceDirWrapper.cpp
+@@ -78,11 +78,18 @@ bool ResourceDirWrapper::wrap()
+     }
+     IMAGE_RESOURCE_DIRECTORY* dir = resourceDir();
+     if (dir == NULL) return false;
++    if (this->root == this) {
++        // the top directory is the first one to be expanded (it is addressed by rawOff == 0)
++        this->expandedDirs.clear();
++        this->entriesLeft = static_cast<size_t>(m_Exe->getRawSize()) / sizeof(IMAGE_RESOURCE_DIRECTORY_ENTRY);
++        markExpanded(getOffset(mainResourceDir()));
++    }
+     size_t namesNum = dir->NumberOfNamedEntries;
+     size_t idsNum = dir->NumberOfIdEntries;
+ 
+     size_t totalEntries = namesNum + idsNum;
+     for (size_t i = 0; i < totalEntries && i < MAX_ENTRIES; i++ ) {
++        if (!takeEntry()) break;
+ 
+         long topDirId = (this->topEntryID != TOP_ENTRY_ROOT) ? this->topEntryID : long(i) ;
+ 
+@@ -183,7 +190,11 @@ bool ResourceEntryWrapper::wrap()
+     if (this->isDir()) {
+         long depth = this->parentDir->getDepth() + 1;
+         if (depth >= MAX_DEPTH) return false;
+-        this->childDir = new ResourceDirWrapper(this->m_PE, this->album, childRaw, depth, topEntryID);
++        // A malformed file may make directories point back at themselves (or at the top directory),
++        // or make many entries point at the same child. Expand every directory only once;
++        // otherwise the tree grows exponentially with the depth.
++        if (!this->parentDir->markExpanded(childRaw)) return false;
++        this->childDir = new ResourceDirWrapper(this->m_PE, this->album, childRaw, depth, topEntryID, this->parentDir->getRoot());
+     } else {
+         this->childLeaf = new ResourceLeafWrapper(m_Exe, childRaw, topEntryID);
+         if (this->album != NULL) {
+diff --git a/tests/gen_rsrc_poc.py b/tests/gen_rsrc_poc.py
+new file mode 100644
+index 00000000..0d224673
+--- /dev/null
++++ b/tests/gen_rsrc_poc.py
+@@ -0,0 +1,46 @@
++#!/usr/bin/env python3
++"""Generates synthetic PE32 files with malformed resource directories (no malware).
++usage: gen_rsrc_poc.py {selfloop|chain|overlap} OUT [ENTRIES]"""
++import struct, sys
++mode, out = sys.argv[1], sys.argv[2]
++N = int(sys.argv[3]) if len(sys.argv) > 3 else 100
++DIR = 0x80000000
++def rdir(entries):
++    b = struct.pack('<IIHHHH', 0, 0, 0, 0, 0, len(entries))
++    for i, off in enumerate(entries):
++        b += struct.pack('<II', i, off)
++    return b
++dsz = 16 + 8 * N
++if mode == 'selfloop':
++    rs = rdir([DIR | 0] * N)
++elif mode == 'chain':
++    D = 5
++    rs = b''
++    for k in range(D):
++        last = (k == D - 1)
++        tgt = (D * dsz) if last else (DIR | ((k + 1) * dsz))
++        rs += rdir([tgt] * N)
++    rs += struct.pack('<IIII', 0x1000 + len(rs) + 16, 4, 0, 0) + b'\0' * 4  # data entry + payload
++elif mode == 'overlap':
++    # entry j points at a directory whose header starts on entry j of the root:
++    # its entry counts are the words of the next entry's OffsetToData (high word >= 0x8000)
++    rs = rdir([DIR | (16 + 8 * j) for j in range(N)])
++    rs += b'\0' * 16
++else:
++    raise SystemExit('unknown mode')
++rs = rs.ljust((len(rs) + 0x1ff) & ~0x1ff, b'\0')
++hdr = bytearray(0x200)
++hdr[0:2] = b'MZ'; struct.pack_into('<I', hdr, 0x3c, 0x40)
++p = 0x40
++hdr[p:p+4] = b'PE\0\0'
++struct.pack_into('<HHIIIHH', hdr, p+4, 0x14c, 1, 0, 0, 0, 0xE0, 0x102)
++o = p + 24
++struct.pack_into('<HBBIIIIIIIIIHHHHHHIIIIHHIIIIII', hdr, o,
++    0x10b, 0, 0, 0, 0, 0, 0, 0, 0x1000, 0x400000, 0x1000, 0x200,
++    4, 0, 0, 0, 4, 0, 0, 0x2000, 0x200, 0, 3, 0, 0x100000, 0x1000, 0x100000, 0x1000, 0, 16)
++dd = o + 96
++struct.pack_into('<II', hdr, dd + 2 * 8, 0x1000, len(rs))
++s = o + 0xE0
++hdr[s:s+8] = b'.rsrc\0\0\0'
++struct.pack_into('<IIIIIIHHI', hdr, s + 8, len(rs), 0x1000, len(rs), 0x200, 0, 0, 0, 0, 0x40000040)
++open(out, 'wb').write(bytes(hdr) + rs)
+-- 
+2.43.0
+
