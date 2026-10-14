@@ -59,7 +59,7 @@ jobs:
       - name: Test
         env:
           QT_QPA_PLATFORM: offscreen
-        run: ctest --test-dir build --output-on-failure --no-tests=ignore
+        run: ctest --test-dir build --output-on-failure --no-tests=error
 
       # The macOS build produces an .app bundle; confirming it exists catches a
       # CMake change that silently stops bundling long before anyone notices a
