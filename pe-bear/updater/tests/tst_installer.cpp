@@ -451,6 +451,11 @@ void TestInstaller::aCopyFallbackThatFailsHalfwayRestoresTheInstallation()
 	   transaction knows about it the restore cannot happen. */
 	FakeFileSystem fs;
 	installTarget(fs);
+	/* DirectoryInstaller looks for the platform's own name: PE-bear.exe on
+	   Windows, which installTarget() does not lay down. */
+	const QString oldExe = QLatin1String(TARGET) + QLatin1Char('/')
+		+ DirectoryInstaller::applicationFileName();
+	fs.addFile(oldExe, QByteArray("old-binary"));
 	fs.setWritableDefault(true);
 	fs.addFile(QLatin1String("/var/pe-bear-updates/downloads/x.zip"), QByteArray("package"));
 
@@ -470,7 +475,7 @@ void TestInstaller::aCopyFallbackThatFailsHalfwayRestoresTheInstallation()
 
 	QCOMPARE(inst.prepareAndActivate(update()), Installer::FailedRolledBack);
 	QCOMPARE(inst.transaction().state(), TxRolledBack);
-	QCOMPARE(fs.contentOf(QLatin1String("/opt/pe-bear/PE-bear")), QByteArray("old-binary"));
+	QCOMPARE(fs.contentOf(oldExe), QByteArray("old-binary"));
 	QCOMPARE(fs.contentOf(QLatin1String("/opt/pe-bear/SIG.txt")), QByteArray("old-sigs"));
 	QVERIFY(!fs.exists(inst.transaction().record().backupDir));
 }
