@@ -163,33 +163,26 @@ bool RealFileSystem::writeFile(const QString &path, const QByteArray &data)
 {
 	if (path.isEmpty()) return fail(QLatin1String("empty path"));
 
-	/* Written to a sibling and renamed over the target, so a reader never sees
-	   a half-written journal -- the whole point of the journal is that it can
-	   be read after an interruption. */
-	const QString tmp = path + QLatin1String(".tmp");
-	QFile::remove(tmp);
-
-	QFile f(tmp);
-	if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
-		return fail(QLatin1String("could not open ") + QDir::toNativeSeparators(tmp));
+	/* QSaveFile writes a sibling and renames it over the target in one step
+	   (rename(2), MoveFileEx with replace on Windows), so a reader sees either
+	   the old record or the new one -- never a half-written one, and never
+	   none at all. Removing the target first and then renaming, as this did,
+	   left a moment with no file; and when the rename then failed -- a scanner
+	   holding the old file open on Windows is enough -- the sibling was
+	   deleted too, and the record was gone for good. A failed write here
+	   leaves the previous content untouched. */
+	QSaveFile f(path);
+	if (!f.open(QIODevice::WriteOnly)) {
+		return fail(QLatin1String("could not open ") + QDir::toNativeSeparators(path)
+			+ QLatin1String(": ") + f.errorString());
 	}
-	const qint64 written = f.write(data);
-	if (written != data.size()) {
-		f.close();
-		QFile::remove(tmp);
-		return fail(QLatin1String("short write to ") + QDir::toNativeSeparators(tmp));
+	if (f.write(data) != data.size()) {
+		/* not committed: the destructor discards the sibling */
+		return fail(QLatin1String("short write to ") + QDir::toNativeSeparators(path));
 	}
-	if (!f.flush()) {
-		f.close();
-		QFile::remove(tmp);
-		return fail(QLatin1String("could not flush ") + QDir::toNativeSeparators(tmp));
-	}
-	f.close();
-
-	QFile::remove(path);
-	if (!QFile::rename(tmp, path)) {
-		QFile::remove(tmp);
-		return fail(QLatin1String("could not place ") + QDir::toNativeSeparators(path));
+	if (!f.commit()) {
+		return fail(QLatin1String("could not place ") + QDir::toNativeSeparators(path)
+			+ QLatin1String(": ") + f.errorString());
 	}
 	UpdatePaths::restrictToOwner(path);
 	return true;

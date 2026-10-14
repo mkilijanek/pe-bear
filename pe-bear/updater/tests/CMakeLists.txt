@@ -33,6 +33,7 @@ set(updater_tests
 	tst_helperresult
 	tst_helperrelocation
 	tst_buildmanifest
+	tst_filesystem
 )
 
 foreach(test_name ${updater_tests})
