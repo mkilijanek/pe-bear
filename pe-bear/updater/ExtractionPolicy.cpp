@@ -16,6 +16,7 @@ namespace {
 		{ ExtractionPolicy::TrailingDotOrSpace,       "TrailingDotOrSpace"       },
 		{ ExtractionPolicy::ReservedWindowsName,      "ReservedWindowsName"      },
 		{ ExtractionPolicy::ControlCharacterInPath,   "ControlCharacterInPath"   },
+		{ ExtractionPolicy::AlternateStreamInPath,    "AlternateStreamInPath"    },
 		{ ExtractionPolicy::PathTooLong,              "PathTooLong"              },
 		{ ExtractionPolicy::TooManyPathComponents,    "TooManyPathComponents"    },
 		{ ExtractionPolicy::UnsupportedEntryKind,     "UnsupportedEntryKind"     },
@@ -67,6 +68,7 @@ QString ExtractionPolicy::rejectionMessage(Rejection r, const QString &path)
 		case TrailingDotOrSpace:
 		case ReservedWindowsName:
 		case ControlCharacterInPath:
+		case AlternateStreamInPath:
 			return QCoreApplication::translate("Updater",
 				"The package contains %1, which is not a usable file name on this system.").arg(who);
 		case PathTooLong:
@@ -195,6 +197,13 @@ ExtractionPolicy::Rejection ExtractionPolicy::checkEntry(const ArchiveEntry &ent
 				return ControlCharacterInPath;
 			}
 		}
+		/* Past the drive-letter check above, a colon in a component is not a
+		   path character on NTFS but the start of a stream name: "a.exe:s"
+		   writes a hidden stream of a.exe, and "a.exe::$DATA" is a.exe itself,
+		   spelled so that neither the duplicate nor the case-collision check
+		   would see it. No package of ours needs a colon, so it is refused on
+		   every host, as the other shape checks are. */
+		if (part.contains(QLatin1Char(':'))) return AlternateStreamInPath;
 		/* "a." and "a " both resolve to "a" on Windows, so two such entries
 		   would silently overwrite one another. */
 		if (part.endsWith(QLatin1Char('.')) || part.endsWith(QLatin1Char(' '))) {

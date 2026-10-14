@@ -117,6 +117,14 @@ void TestExtractionPolicy::rejectsByPathShape_data()
 	QTest::newRow("control char") << QString("PE-bear/x%1y").arg(QChar(0x01)) << int(ExtractionPolicy::ControlCharacterInPath);
 	QTest::newRow("embedded NUL") << QString("PE-bear/x%1y").arg(QChar(0x00)) << int(ExtractionPolicy::ControlCharacterInPath);
 	QTest::newRow("delete char") << QString("PE-bear/x%1").arg(QChar(0x7F)) << int(ExtractionPolicy::ControlCharacterInPath);
+
+	/* On NTFS "name:stream" addresses an alternate data stream and
+	   "name::$DATA" is the file itself, so the latter would also slip past the
+	   duplicate check as a different spelling of "name". */
+	QTest::newRow("data stream") << "PE-bear/PE-bear.exe:evil" << int(ExtractionPolicy::AlternateStreamInPath);
+	QTest::newRow("default stream") << "PE-bear/PE-bear.exe::$DATA" << int(ExtractionPolicy::AlternateStreamInPath);
+	QTest::newRow("colon in a directory") << "PE-bear:x/file" << int(ExtractionPolicy::AlternateStreamInPath);
+	QTest::newRow("colon backslash form") << "PE-bear\\x.dll:s" << int(ExtractionPolicy::AlternateStreamInPath);
 }
 
 void TestExtractionPolicy::rejectsByPathShape()
