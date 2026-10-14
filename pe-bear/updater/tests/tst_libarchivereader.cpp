@@ -10,6 +10,7 @@
  */
 #include <QtTest>
 #include "../LibArchiveReader.h"
+#include "../ExtractionPolicy.h"
 
 #ifdef PEBEAR_WITH_LIBARCHIVE
 
@@ -110,6 +111,8 @@ private slots:
 	void closeResetsTheReader();
 	void handlesAnEmptyArchive();
 	void handlesAZeroLengthFile();
+	void readsBackEveryPathThePolicyAccepts_data();
+	void readsBackEveryPathThePolicyAccepts();
 };
 
 void TestLibArchiveReader::readsAZip()
@@ -358,6 +361,48 @@ void TestLibArchiveReader::handlesAZeroLengthFile()
 	QVERIFY(e != NULL);
 	QCOMPARE(e->uncompressedSize, Q_INT64_C(0));
 	QCOMPARE(r.readEntry(QLatin1String("PE-bear/empty.txt")), QByteArray());
+}
+
+void TestLibArchiveReader::readsBackEveryPathThePolicyAccepts_data()
+{
+	/* The extractor asks readEntry() for the policy's normalised path, so the
+	   two must agree on every spelling the policy accepts. A path the policy
+	   passes but the reader cannot find makes the whole update fail late, after
+	   the destination has been created. */
+	QTest::addColumn<QString>("stored");
+	QTest::addColumn<QString>("expected");
+
+	QTest::newRow("plain")            << "PE-bear/a.txt"       << "PE-bear/a.txt";
+	QTest::newRow("leading dot")      << "./PE-bear/a.txt"     << "PE-bear/a.txt";
+	QTest::newRow("doubled slash")    << "PE-bear//a.txt"      << "PE-bear/a.txt";
+	QTest::newRow("dot component")    << "PE-bear/./a.txt"     << "PE-bear/a.txt";
+	QTest::newRow("dot slash dot")    << ".//PE-bear/a.txt"    << "PE-bear/a.txt";
+	QTest::newRow("backslash")        << "PE-bear\\a.txt"      << "PE-bear/a.txt";
+	QTest::newRow("doubled backslash") << "PE-bear\\\\a.txt"   << "PE-bear/a.txt";
+}
+
+void TestLibArchiveReader::readsBackEveryPathThePolicyAccepts()
+{
+	QFETCH(QString, stored);
+	QFETCH(QString, expected);
+
+	QTemporaryDir dir;
+	const QString path = QDir(dir.path()).absoluteFilePath("pkg.zip");
+	QList<Spec> specs;
+	specs << Spec(stored, QByteArray("body"));
+	QVERIFY(writeArchive(path, "zip", specs));
+
+	LibArchiveReader r;
+	QVERIFY2(r.open(path), qPrintable(r.lastError()));
+
+	ExtractionPolicy policy;
+	const ExtractionPolicy::Verdict v = policy.check(r.entries());
+	QVERIFY2(v.ok, qPrintable(v.message()));
+	QCOMPARE(v.accepted.size(), 1);
+	QCOMPARE(v.accepted.at(0).path, expected);
+
+	const QByteArray body = r.readEntry(v.accepted.at(0).path);
+	QVERIFY2(body == QByteArray("body"), qPrintable(r.lastError()));
 }
 
 QTEST_GUILESS_MAIN(TestLibArchiveReader)

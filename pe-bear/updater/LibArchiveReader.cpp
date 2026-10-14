@@ -1,4 +1,5 @@
 #include "LibArchiveReader.h"
+#include "ExtractionPolicy.h"
 
 #ifdef PEBEAR_WITH_LIBARCHIVE
 
@@ -185,12 +186,10 @@ QByteArray LibArchiveReader::readEntry(const QString &path)
 		if (!raw) raw = archive_entry_pathname(entry);
 		const QString candidate = raw ? QString::fromUtf8(raw) : QString();
 
-		/* Compared after the same normalisation the policy applied, since the
-		   caller asks with the normalised name. */
-		QString normalised = candidate;
-		normalised.replace(QLatin1Char('\\'), QLatin1Char('/'));
-		while (normalised.startsWith(QLatin1String("./"))) normalised.remove(0, 2);
-		if (normalised != path) {
+		/* Compared after the very normalisation the policy applied, since the
+		   caller asks with the normalised name. A second, hand-written copy
+		   of it here missed "a//b" and "a/./b", which the policy accepts. */
+		if (ExtractionPolicy::normalisePath(candidate) != path) {
 			archive_read_data_skip(a);
 			continue;
 		}
