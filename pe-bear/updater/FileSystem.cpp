@@ -1,6 +1,8 @@
 #include "FileSystem.h"
 #include "UpdatePaths.h"
 
+#include <QThread>
+
 using namespace pe_bear::updater;
 
 QString pe_bear::updater::parentDirectoryOf(const QString &path)
@@ -163,33 +165,39 @@ bool RealFileSystem::writeFile(const QString &path, const QByteArray &data)
 {
 	if (path.isEmpty()) return fail(QLatin1String("empty path"));
 
-	/* Written to a sibling and renamed over the target, so a reader never sees
-	   a half-written journal -- the whole point of the journal is that it can
-	   be read after an interruption. */
-	const QString tmp = path + QLatin1String(".tmp");
-	QFile::remove(tmp);
-
-	QFile f(tmp);
-	if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
-		return fail(QLatin1String("could not open ") + QDir::toNativeSeparators(tmp));
-	}
-	const qint64 written = f.write(data);
-	if (written != data.size()) {
-		f.close();
-		QFile::remove(tmp);
-		return fail(QLatin1String("short write to ") + QDir::toNativeSeparators(tmp));
-	}
-	if (!f.flush()) {
-		f.close();
-		QFile::remove(tmp);
-		return fail(QLatin1String("could not flush ") + QDir::toNativeSeparators(tmp));
-	}
-	f.close();
-
-	QFile::remove(path);
-	if (!QFile::rename(tmp, path)) {
-		QFile::remove(tmp);
-		return fail(QLatin1String("could not place ") + QDir::toNativeSeparators(path));
+	/* QSaveFile writes a sibling and renames it over the target in one step
+	   (rename(2), MoveFileEx with replace on Windows), so a reader sees either
+	   the old record or the new one -- never a half-written one, and never
+	   none at all. Removing the target first and then renaming, as this did,
+	   left a moment with no file; and when the rename then failed -- a scanner
+	   holding the old file open on Windows is enough -- the sibling was
+	   deleted too, and the record was gone for good. A failed write here
+	   leaves the previous content untouched. */
+	/* On Windows the replace is refused ("Access is denied") while anyone
+	   else has the target open: QFile opens without FILE_SHARE_DELETE, so a
+	   reader of the journal is enough, and on the CI runner a loop of mere
+	   existence checks refused about a third of the replaces. Such a hold is
+	   brief, so the whole write is tried again for a short, bounded while
+	   (about a third of a second in all) before it counts as failed;
+	   QSaveFile has already discarded its sibling, so a retry starts from
+	   scratch and the previous content stays as it was. */
+	const int attempts = 20;
+	for (int attempt = 0; ; attempt++) {
+		QSaveFile f(path);
+		if (!f.open(QIODevice::WriteOnly)) {
+			return fail(QLatin1String("could not open ") + QDir::toNativeSeparators(path)
+				+ QLatin1String(": ") + f.errorString());
+		}
+		if (f.write(data) != data.size()) {
+			/* not committed: the destructor discards the sibling */
+			return fail(QLatin1String("short write to ") + QDir::toNativeSeparators(path));
+		}
+		if (f.commit()) break;
+		if (attempt + 1 >= attempts) {
+			return fail(QLatin1String("could not place ") + QDir::toNativeSeparators(path)
+				+ QLatin1String(": ") + f.errorString());
+		}
+		QThread::msleep(qMin(1 + 2 * attempt, 25));
 	}
 	UpdatePaths::restrictToOwner(path);
 	return true;
