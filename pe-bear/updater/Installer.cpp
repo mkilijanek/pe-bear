@@ -160,8 +160,16 @@ Installer::Outcome Installer::prepareAndActivate(const VerifiedUpdate &update)
 			+ m_tx.lastError());
 	}
 
-	/* 7. Activation. The steps go into the journal before the state advances,
-	      so an interruption leaves them undoable. */
+	/* 7. Activation. The target goes into the journal before anything is
+	      put there, and the steps the platform reports once it returns go in
+	      before the state advances. Without the first, a copy that fails
+	      halfway -- or a helper that dies after the move -- leaves a target
+	      the record knows nothing about, and the backup cannot be moved back
+	      over it: a rollback that ends in "needs a person". */
+	if (!m_tx.markActivating(m_targetDir)) {
+		return abandon(QLatin1String("could not record the activation target: ")
+			+ m_tx.lastError());
+	}
 	QList<TransactionOp> activationOps;
 	if (!m_platform->activate(stagingDir, m_targetDir, &activationOps)) {
 		return abandon(QLatin1String("could not put the new files in place: ")
