@@ -36,6 +36,8 @@ set(updater_tests
 	tst_filesystem
 )
 
+file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/test-logs")
+
 foreach(test_name ${updater_tests})
 	# TestHttpServer.h declares a QObject, so it must be a source of the target
 	# for AUTOMOC to generate its meta-object.
@@ -54,7 +56,11 @@ foreach(test_name ${updater_tests})
 	target_compile_definitions(${test_name} PRIVATE
 		FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data"
 		PEBEAR_BUILD_MANIFEST_PATH="${PEBEAR_BUILD_MANIFEST}")
-	add_test(NAME ${test_name} COMMAND ${test_name})
+	# The log goes to a file as well as to stdout: on the Windows runner the
+	# stdout of a failing test has not reached the job log, which left a red
+	# test with nothing to say why.
+	add_test(NAME ${test_name} COMMAND ${test_name}
+		-o "${CMAKE_BINARY_DIR}/test-logs/${test_name}.txt,txt" -o "-,txt")
 	# QStandardPaths must not write into the developer's real config
 	set_tests_properties(${test_name} PROPERTIES
 		ENVIRONMENT "QT_QPA_PLATFORM=offscreen"

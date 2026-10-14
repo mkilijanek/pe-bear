@@ -24,6 +24,7 @@ namespace {
 			: m_path(path), m_rounds(rounds), m_failures(0) {}
 
 		int failures() const { return m_failures; }
+		QString firstError() const { return m_firstError; }
 
 	protected:
 		virtual void run()
@@ -31,7 +32,7 @@ namespace {
 			RealFileSystem fs;
 			for (int i = 0; i < m_rounds; i++) {
 				if (!fs.writeFile(m_path, QByteArray("{\"round\": ") + QByteArray::number(i) + "}")) {
-					m_failures++;
+					if (m_failures++ == 0) m_firstError = fs.lastError();
 				}
 			}
 		}
@@ -40,6 +41,7 @@ namespace {
 		QString m_path;
 		int m_rounds;
 		int m_failures;
+		QString m_firstError;
 	};
 
 }; // namespace
@@ -99,7 +101,8 @@ void TestFileSystem::aReaderNeverFindsTheFileMissingWhileItIsRewritten()
 	}
 	writer.wait();
 
-	QCOMPARE(writer.failures(), 0);
+	QVERIFY2(writer.failures() == 0, qPrintable(QString::number(writer.failures())
+		+ QLatin1String(" of 5000 writes failed, the first with: ") + writer.firstError()));
 	QVERIFY2(missing == 0, qPrintable(QString::number(missing) + QLatin1String(" of ")
 		+ QString::number(checks) + QLatin1String(" checks found no file")));
 	QVERIFY(fs.readFile(path).startsWith("{\"round\": 4999}"));
