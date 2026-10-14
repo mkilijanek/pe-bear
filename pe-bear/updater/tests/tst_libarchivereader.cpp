@@ -110,6 +110,7 @@ private slots:
 	void closeResetsTheReader();
 	void handlesAnEmptyArchive();
 	void handlesAZeroLengthFile();
+	void refusesAnEntryDeclaringMoreThanItWillRead();
 };
 
 void TestLibArchiveReader::readsAZip()
@@ -358,6 +359,50 @@ void TestLibArchiveReader::handlesAZeroLengthFile()
 	QVERIFY(e != NULL);
 	QCOMPARE(e->uncompressedSize, Q_INT64_C(0));
 	QCOMPARE(r.readEntry(QLatin1String("PE-bear/empty.txt")), QByteArray());
+}
+
+void TestLibArchiveReader::refusesAnEntryDeclaringMoreThanItWillRead()
+{
+	/* Listing an archive decompresses every body (a stream filter cannot
+	   seek), so a header that declares a huge entry makes open() spend that
+	   long before the extraction policy is ever consulted. A 600 KB tar.xz
+	   declaring 4 GiB took about 8 s to list. The declared size is therefore
+	   judged from the header, before the body is skipped.
+
+	   Written by hand: libarchive's own writer would insist on the body. The
+	   header declares 2 GiB and the file ends there, so an implementation that
+	   tried to skip the body would report a truncated archive instead. */
+	QByteArray header(512, '\0');
+	/* Overwrites in place; QByteArray::replace would resize on a length mismatch. */
+	struct Put {
+		static void at(QByteArray &b, int pos, const QByteArray &v) { ::memcpy(b.data() + pos, v.constData(), size_t(v.size())); }
+	};
+	Put::at(header, 0, "big.bin");
+	Put::at(header, 100, "0000644");
+	Put::at(header, 108, "0000000");
+	Put::at(header, 116, "0000000");
+	Put::at(header, 124, "20000000000"); /* 2 GiB, octal */
+	Put::at(header, 136, "00000000000");
+	Put::at(header, 148, "        ");    /* the checksum field counts as blanks while summing */
+	header[156] = '0';
+	Put::at(header, 257, QByteArray("ustar\0", 6));
+	Put::at(header, 263, "00");
+	unsigned int sum = 0;
+	for (int i = 0; i < header.size(); i++) sum += static_cast<unsigned char>(header.at(i));
+	Put::at(header, 148, QByteArray::number(sum, 8).rightJustified(6, '0') + QByteArray("\0 ", 2));
+	QCOMPARE(header.size(), 512);
+
+	QTemporaryDir dir;
+	const QString path = QDir(dir.path()).absoluteFilePath("big.tar");
+	QFile f(path);
+	QVERIFY(f.open(QIODevice::WriteOnly));
+	QCOMPARE(f.write(header), qint64(512));
+	f.close();
+
+	LibArchiveReader r;
+	QVERIFY(!r.open(path));
+	QVERIFY2(r.lastError().contains(QLatin1String("larger than")), qPrintable(r.lastError()));
+	QCOMPARE(r.entries().size(), 0);
 }
 
 QTEST_GUILESS_MAIN(TestLibArchiveReader)
