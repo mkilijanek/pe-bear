@@ -63,6 +63,7 @@ private slots:
 	void loadingReplacesWhatWasThereBefore();
 	void refusesToLoadAMissingFile();
 	void savingNothingCreatesNoFile();
+	void userDataNamesDependOnTheWholePath();
 };
 
 void TestCommentHandler::storesAndReturnsAComment()
@@ -263,6 +264,25 @@ void TestCommentHandler::savingNothingCreatesNoFile()
 	CommentHandler handler;
 	QVERIFY2(handler.saveToFile(path), "saving an empty set reported failure");
 	QVERIFY2(!QFile::exists(path), "an empty tag file was created");
+}
+
+void TestCommentHandler::userDataNamesDependOnTheWholePath()
+{
+	/* The user data directory is flat: two samples called "sample.exe" in
+	   different directories must not read and overwrite one tag file. */
+	QTemporaryDir dir;
+	const QString first = QDir(dir.path()).absoluteFilePath("a/sample.exe");
+	const QString second = QDir(dir.path()).absoluteFilePath("b/sample.exe");
+
+	const QString firstName = CommentHandler::userDataFileName(first);
+	QVERIFY(firstName != CommentHandler::userDataFileName(second));
+	QCOMPARE(CommentHandler::userDataFileName(first), firstName);
+
+	/* still recognisable, and a plain file name */
+	QVERIFY(firstName.startsWith(QLatin1String("sample.exe.")));
+	QVERIFY(firstName.endsWith(QLatin1String(".tag")));
+	QVERIFY(!firstName.contains('/'));
+	QVERIFY(!firstName.contains('\\'));
 }
 
 QTEST_GUILESS_MAIN(TestCommentHandler)

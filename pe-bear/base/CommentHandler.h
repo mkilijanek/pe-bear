@@ -41,6 +41,11 @@ public:
 	//---
 	bool saveToFile(QString fileName);
 	bool loadFromFile(QString fileName);
+
+	/* Name of the tag file kept for this sample in the user data directory:
+	   "<file name>.<path hash>.tag", so that samples with the same file name
+	   in different directories do not share one. */
+	static QString userDataFileName(const QString &samplePath);
 	size_t commentsNum() { return commentsMap.size(); }
 
 	std::vector<Comment*> commentsVec;
