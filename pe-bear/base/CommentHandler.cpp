@@ -186,6 +186,8 @@ size_t CommentHandler::getCommentsNum()
 
 void CommentHandler::onLoaded()
 {
+	// the tags now come from a file: saving an empty set must overwrite it
+	this->isLoaded = true;
 	// delete loader thread:
 	delete this->t;
 	this->t = NULL;
