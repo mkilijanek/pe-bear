@@ -41,6 +41,13 @@ namespace {
 		return updated.wait(5000);
 	}
 
+	/** Exposes the loader thread, to drive it directly. */
+	class LoaderAccess : public CommentHandler
+	{
+	public:
+		typedef CommentHandler::LoaderThread Loader;
+	};
+
 }; // namespace
 
 class TestCommentHandler : public QObject
@@ -61,6 +68,7 @@ private slots:
 	void keepsACommentContainingTheDelimiter();
 	void skipsMalformedLinesWhileLoading();
 	void loadingReplacesWhatWasThereBefore();
+	void aBreakBeforeTheLoaderStartsIsKept();
 	void refusesToLoadAMissingFile();
 	void savingNothingCreatesNoFile();
 };
@@ -244,6 +252,24 @@ void TestCommentHandler::loadingReplacesWhatWasThereBefore()
 	QVERIFY2(handler.getCommentAt(0x1000).isEmpty(),
 		"loading a file left earlier tags behind");
 	QCOMPARE(int(handler.commentsNum()), 1);
+}
+
+void TestCommentHandler::aBreakBeforeTheLoaderStartsIsKept()
+{
+	/* clear() -- run by the destructor -- asks a running load to stop. The
+	   request can come before the thread got to run(); it must not be
+	   forgotten there, or closing a file waits for its whole .tag first. */
+	QTemporaryDir dir;
+	const QString path = writeFile(dir, "tags.txt", QLatin1String("1000;one\n2000;two\n"));
+	QVERIFY(!path.isEmpty());
+
+	CommentHandler handler;
+	LoaderAccess::Loader loader(path, &handler);
+	loader.breakReading();
+	loader.start();
+	QVERIFY(loader.wait(5000));
+
+	QCOMPARE(int(handler.commentsNum()), 0);
 }
 
 void TestCommentHandler::refusesToLoadAMissingFile()

@@ -64,7 +64,6 @@ void CommentHandler::LoaderThread::loadFromQFile(QString path)
 
 void CommentHandler::LoaderThread::run()
 {
-	isBreakReading = false;
 	loadFromQFile(this->fPath);
 	//printf("thread stopped\n");
 }
