@@ -106,6 +106,15 @@ list(APPEND deps_pemodels
 	${PB}/DateDisplay.cpp
 )
 
+# the Compare window: the PE views plus the window and its own models
+set(deps_diffwindow
+	${deps_pemodels}
+	${PB}/PEFileTreeModel.cpp
+	${PB}/HexCompareView.cpp
+	${PB}/gui/HexDiffModel.cpp
+	${PB}/gui/windows/DiffWindow.cpp
+)
+
 # --- test targets: name -> extra sources ---
 set(pebear_tests
 	tst_minimalpe
@@ -115,6 +124,7 @@ set(pebear_tests
 	tst_stringscollection
 	tst_treemodel
 	tst_pemodels
+	tst_diffwindow
 )
 
 foreach(test_name ${pebear_tests})
@@ -130,6 +140,8 @@ foreach(test_name ${pebear_tests})
 		set(test_deps ${deps_treemodel})
 	elseif(test_name STREQUAL "tst_pemodels")
 		set(test_deps ${deps_pemodels})
+	elseif(test_name STREQUAL "tst_diffwindow")
+		set(test_deps ${deps_diffwindow})
 	else()
 		set(test_deps "")
 	endif()
