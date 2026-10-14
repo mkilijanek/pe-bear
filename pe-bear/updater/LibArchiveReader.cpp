@@ -7,6 +7,9 @@
 
 using namespace pe_bear::updater;
 
+const int LibArchiveReader::MAX_ENTRIES_SCANNED;
+const qint64 LibArchiveReader::MAX_ENTRY_BYTES;
+
 namespace {
 
 	/** Read block size handed to libarchive. */
