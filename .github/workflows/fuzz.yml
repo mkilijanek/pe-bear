@@ -1,0 +1,90 @@
+# A short libFuzzer run of bearparser's PE loading (fuzz/fuzz_pefile.cpp).
+#
+# Sixty seconds will not find much on its own; what it does is keep the
+# harness building and running, and catch the shallow crashes a change
+# introduces. Longer runs are for a local machine (see fuzz/CMakeLists.txt).
+name: Fuzz
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fuzz-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fuzz:
+    name: bearparser PE loading (libFuzzer, 60 s)
+    runs-on: ubuntu-24.04
+
+    # Advisory: the harness already finds undefined behaviour in bearparser
+    # on current main (an enum loaded out of range in ResourceDirWrapper.cpp,
+    # member access through a null IMAGE_IMPORT_BY_NAME* in
+    # ImportDirWrapper.cpp, pointer arithmetic on null in
+    # ExeElementWrapper.cpp). Make this blocking once those are fixed.
+    continue-on-error: true
+
+    steps:
+      - name: Check out, including submodules
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          submodules: recursive
+          persist-credentials: false
+
+      # libclang-rt-18-dev carries libFuzzer and the sanitizer runtimes;
+      # clang on its own cannot link -fsanitize=fuzzer.
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            cmake ninja-build clang libclang-rt-18-dev libarchive-dev qtbase5-dev
+
+      - name: Configure
+        run: >
+          cmake -S . -B build -G Ninja
+          -DUSE_QT5=ON
+          -DPEBEAR_BUILD_FUZZERS=ON
+          -DCMAKE_C_COMPILER=clang
+          -DCMAKE_CXX_COMPILER=clang++
+
+      # Only the fuzzer and the seed generator; the rest of an instrumented
+      # build is not needed for this.
+      - name: Build
+        run: cmake --build build --parallel --target fuzz_pefile fuzz_make_seeds
+
+      - name: Generate the seed corpus
+        run: build/fuzz/fuzz_make_seeds seeds
+
+      # -fork with -ignore_crashes keeps going after the first finding, so
+      # one known crash does not hide the others. In that mode libFuzzer
+      # exits 0 whatever it found, so the step looks at crashes/ itself and
+      # replays each input once to put its report in the log.
+      - name: Fuzz for 60 seconds
+        run: |
+          mkdir -p corpus crashes
+          build/fuzz/fuzz_pefile corpus seeds \
+            -fork=2 -ignore_crashes=1 -ignore_timeouts=1 -ignore_ooms=1 \
+            -max_total_time=60 -timeout=10 -rss_limit_mb=2048 \
+            -artifact_prefix=crashes/
+          found=$(find crashes -type f | wc -l)
+          [ "$found" -eq 0 ] && { echo "no crashes"; exit 0; }
+          for f in crashes/*; do
+            echo "::group::$f"
+            build/fuzz/fuzz_pefile "$f" 2>&1 | grep -E 'ERROR|runtime error|SUMMARY' | head -5 || true
+            echo "::endgroup::"
+          done
+          echo "::error::the fuzzer found $found crashing input(s); they are kept as the fuzz-crashes artifact"
+          exit 1
+
+      - name: Keep the crashing inputs
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: fuzz-crashes
+          path: crashes/
+          if-no-files-found: ignore
