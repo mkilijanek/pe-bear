@@ -74,6 +74,10 @@ bool UpdatePaths::restrictToOwner(const QString &path)
 {
 	QFile::Permissions perms = QFile::ReadOwner | QFile::WriteOwner;
 	QFileInfo info(path);
+	/* setPermissions follows a link, so restricting one would change whatever it
+	   points at -- which, for a link somebody else put where a private directory
+	   was expected, is not ours to change. */
+	if (info.isSymLink()) return false;
 	if (info.isDir()) {
 		perms |= QFile::ExeOwner;
 	}

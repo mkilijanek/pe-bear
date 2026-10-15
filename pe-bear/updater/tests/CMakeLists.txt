@@ -108,4 +108,10 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND TARGET pe-bear-updater)
 			$<TARGET_FILE:PE-bear> $<TARGET_FILE:pe-bear-updater>
 	)
 	set_tests_properties(tst_e2e_linux_rollback PROPERTIES TIMEOUT 400)
+	# And a staging root somebody else planted beside the installation.
+	add_test(NAME tst_e2e_linux_hostile_staging
+		COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/e2e_linux_hostile_staging.sh
+			$<TARGET_FILE:PE-bear> $<TARGET_FILE:pe-bear-updater>
+	)
+	set_tests_properties(tst_e2e_linux_hostile_staging PROPERTIES TIMEOUT 300)
 endif()
