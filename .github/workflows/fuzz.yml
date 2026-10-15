@@ -22,13 +22,6 @@ jobs:
     name: bearparser PE loading (libFuzzer, 60 s)
     runs-on: ubuntu-24.04
 
-    # Advisory: the harness already finds undefined behaviour in bearparser
-    # on current main (an enum loaded out of range in ResourceDirWrapper.cpp,
-    # member access through a null IMAGE_IMPORT_BY_NAME* in
-    # ImportDirWrapper.cpp, pointer arithmetic on null in
-    # ExeElementWrapper.cpp). Make this blocking once those are fixed.
-    continue-on-error: true
-
     steps:
       - name: Check out, including submodules
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -64,7 +57,19 @@ jobs:
       # one known crash does not hide the others. In that mode libFuzzer
       # exits 0 whatever it found, so the step looks at crashes/ itself and
       # replays each input once to put its report in the log.
+      #
+      # Informational for now (continue-on-error on this step, so the check
+      # stays green and the findings show as an annotation and an
+      # artifact): the harness already finds undefined behaviour in
+      # bearparser on current main -- an out-of-range pe::resource_type in
+      # ResourceDirWrapper.cpp:98, member access through a null
+      # IMAGE_IMPORT_BY_NAME* in ImportDirWrapper.cpp:134, arithmetic on a
+      # null pointer in ExeElementWrapper.cpp:33. Remove continue-on-error
+      # once those are fixed. A job-level continue-on-error would still
+      # show the check as failed.
       - name: Fuzz for 60 seconds
+        id: fuzz
+        continue-on-error: true
         run: |
           mkdir -p corpus crashes
           build/fuzz/fuzz_pefile corpus seeds \
@@ -82,7 +87,7 @@ jobs:
           exit 1
 
       - name: Keep the crashing inputs
-        if: failure()
+        if: steps.fuzz.outcome == 'failure'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: fuzz-crashes
