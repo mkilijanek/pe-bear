@@ -46,9 +46,15 @@ jobs:
           ref: ${{ github.event.inputs.tag || github.ref }}
       - id: v
         shell: bash
+        # The tag reaches the script through the environment, never as text
+        # spliced into it: a dispatch input is free-form, and ${{ }} inside
+        # run: is expanded before bash sees the script, so a crafted "tag"
+        # would run as code before the regex below could reject it.
+        env:
+          TAG_INPUT: ${{ github.event.inputs.tag || github.ref_name }}
         run: |
           set -euo pipefail
-          tag="${{ github.event.inputs.tag || github.ref_name }}"
+          tag="$TAG_INPUT"
           [[ "$tag" =~ ^v([0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?)(-p([0-9]+))?$ ]] || { echo "::error::tag '$tag' is not v<a.b.c>[-p<N>]"; exit 1; }
           base="${BASH_REMATCH[1]}"; patch=$((10#${BASH_REMATCH[4]:-0}))
           major=$(sed -n 's/^#define REBEAR_MAJOR_VERSION[[:space:]]*\([0-9]*\).*/\1/p' pe-bear/rebear_ver_short.h)
@@ -216,9 +222,13 @@ jobs:
     permissions:
       contents: write
     steps:
+      # This job holds contents: write. Everything it writes goes through gh
+      # with GH_TOKEN, never git push, so the token is not left behind in
+      # .git/config for later steps to find.
       - uses: actions/checkout@v4
         with:
           ref: ${{ needs.version.outputs.tag }}
+          persist-credentials: false
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
