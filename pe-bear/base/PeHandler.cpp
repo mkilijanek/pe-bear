@@ -915,7 +915,9 @@ ImportedFuncWrapper* PeHandler::_addImportFunc(ImportEntryWrapper *lib, bool con
 	{ //scope0
 		// create a temporary wrapper to check if adding a terminating record is possible:
 		ImportedFuncWrapper *nextFuncSpacer = new ImportedFuncWrapper(m_PE, lib, funcNum + 1);
-		if (nextFuncSpacer->getThunkValue()) {
+		bool isFtOk = false;
+		const uint64_t ftValue = nextFuncSpacer->getNumValue(ImportedFuncWrapper::THUNK, &isFtOk);
+		if (nextFuncSpacer->getThunkValue() || (isFtOk && ftValue)) {
 			// not an empty space
 			delete nextFuncSpacer;
 			return NULL;
@@ -930,12 +932,20 @@ ImportedFuncWrapper* PeHandler::_addImportFunc(ImportEntryWrapper *lib, bool con
 	{ //scope1
 		// create a temporary wrapper to help filling in the space:
 		nextFunc = new ImportedFuncWrapper(m_PE, lib, funcNum);
-		offset_t offset = nextFunc->getFieldOffset(ImportEntryWrapper::FIRST_THUNK);
-		bufsize_t fieldSize = nextFunc->getFieldSize(ImportEntryWrapper::FIRST_THUNK);
+		// claim the slot in the First Thunk array:
+		offset_t offset = nextFunc->getFieldOffset(ImportedFuncWrapper::THUNK);
+		bufsize_t fieldSize = nextFunc->getFieldSize(ImportedFuncWrapper::THUNK);
 
-		if (offset && fieldSize) {
+		if (offset && offset != INVALID_ADDR && fieldSize) {
 			backupModification(offset, fieldSize, continueLastOperation);
-			isSet = nextFunc->setNumValue(ImportEntryWrapper::FIRST_THUNK, (-1));
+			isSet = nextFunc->setNumValue(ImportedFuncWrapper::THUNK, (-1));
+		}
+		// ...and the parallel one in the Original First Thunk array, if the library has it:
+		const offset_t origOffset = nextFunc->getFieldOffset(ImportedFuncWrapper::ORIG_THUNK);
+		const bufsize_t origSize = nextFunc->getFieldSize(ImportedFuncWrapper::ORIG_THUNK);
+		if (isSet && origOffset && origOffset != INVALID_ADDR && origOffset != offset && origSize) {
+			backupModification(origOffset, origSize, true);
+			isSet = nextFunc->setNumValue(ImportedFuncWrapper::ORIG_THUNK, (-1));
 		}
 	} //!scope1
 	

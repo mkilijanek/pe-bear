@@ -115,6 +115,7 @@ set(pebear_tests
 	tst_stringscollection
 	tst_treemodel
 	tst_pemodels
+	tst_importfunc
 )
 
 foreach(test_name ${pebear_tests})
@@ -128,7 +129,7 @@ foreach(test_name ${pebear_tests})
 		set(test_deps ${deps_stringscollection})
 	elseif(test_name STREQUAL "tst_treemodel")
 		set(test_deps ${deps_treemodel})
-	elseif(test_name STREQUAL "tst_pemodels")
+	elseif(test_name STREQUAL "tst_pemodels" OR test_name STREQUAL "tst_importfunc")
 		set(test_deps ${deps_pemodels})
 	else()
 		set(test_deps "")
