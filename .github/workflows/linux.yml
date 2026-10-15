@@ -73,10 +73,10 @@ jobs:
       - name: Build
         run: cmake --build build --parallel
 
-      # --no-tests=ignore keeps this step honest while the test suite is still
-      # landing: it passes when no tests are configured and runs them once they
-      # are, rather than silently reporting success either way.
+      # --no-tests=error: Configure sets PEBEAR_BUILD_TESTS=ON, so a run that
+      # finds no tests means that configuration was lost, not that there is
+      # nothing to run -- fail rather than report success.
       - name: Test
         env:
           QT_QPA_PLATFORM: offscreen
-        run: ctest --test-dir build --output-on-failure --no-tests=ignore
+        run: ctest --test-dir build --output-on-failure --no-tests=error

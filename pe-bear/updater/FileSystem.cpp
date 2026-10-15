@@ -3,6 +3,10 @@
 
 #include <QThread>
 
+#if defined(Q_OS_UNIX)
+	#include <unistd.h>
+#endif
+
 using namespace pe_bear::updater;
 
 QString pe_bear::updater::parentDirectoryOf(const QString &path)
@@ -83,6 +87,34 @@ bool RealFileSystem::isWritableDir(const QString &path) const
 		return true;
 	}
 	return false;
+}
+
+bool RealFileSystem::isPrivateDirectory(const QString &path, QString *why) const
+{
+	const QString shown = QDir::toNativeSeparators(path);
+	const QFileInfo info(path);
+
+	/* A link is refused whatever it points at: the point is that nobody else
+	   chose where this lands. */
+	if (info.isSymLink()) {
+		if (why) *why = shown + QLatin1String(" is a link");
+		return false;
+	}
+	if (!info.isDir()) {
+		if (why) *why = shown + QLatin1String(" is not a directory");
+		return false;
+	}
+#if defined(Q_OS_UNIX)
+	if (info.ownerId() != static_cast<uint>(::geteuid())) {
+		if (why) *why = shown + QLatin1String(" belongs to another user");
+		return false;
+	}
+	if (info.permissions() & (QFile::WriteGroup | QFile::WriteOther)) {
+		if (why) *why = shown + QLatin1String(" can be written by other users");
+		return false;
+	}
+#endif
+	return true;
 }
 
 bool RealFileSystem::makeDir(const QString &path)
