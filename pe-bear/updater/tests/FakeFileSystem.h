@@ -119,6 +119,18 @@ public:
 		return m_writable.value(p, m_writableDefault);
 	}
 
+	virtual bool isPrivateDirectory(const QString &path, QString *why = NULL) const
+	{
+		const QString p = clean(path);
+		if (m_notPrivate.contains(p)) {
+			if (why) *why = p + QLatin1String(" is not private (fake)");
+			return false;
+		}
+		return true;
+	}
+	/** Makes isPrivateDirectory() refuse @p path, as for a directory another user created. */
+	void markNotPrivate(const QString &path) { m_notPrivate.insert(clean(path)); }
+
 	virtual bool makeDir(const QString &path)
 	{
 		if (shouldFail(QLatin1String("makeDir"), path)) return fail("makeDir refused");
@@ -278,6 +290,7 @@ private:
 	bool m_writableDefault;
 	QSet<QString> m_executable;
 	QSet<QString> m_installable;
+	QSet<QString> m_notPrivate;
 
 	QSet<QString> m_failAlways;
 	QMap<QString, int> m_failNth;
