@@ -926,6 +926,7 @@ ImportedFuncWrapper* PeHandler::_addImportFunc(ImportEntryWrapper *lib, bool con
 
 	ImportedFuncWrapper *nextFunc = NULL;
 	bool isSet = false;
+	bool isBackedUp = false;
 
 	{ //scope1
 		// create a temporary wrapper to help filling in the space:
@@ -934,14 +935,19 @@ ImportedFuncWrapper* PeHandler::_addImportFunc(ImportEntryWrapper *lib, bool con
 		bufsize_t fieldSize = nextFunc->getFieldSize(ImportEntryWrapper::FIRST_THUNK);
 
 		if (offset && fieldSize) {
-			backupModification(offset, fieldSize, continueLastOperation);
-			isSet = nextFunc->setNumValue(ImportEntryWrapper::FIRST_THUNK, (-1));
+			isBackedUp = this->modifHndl.backupModification(offset, fieldSize, continueLastOperation);
+			if (isBackedUp) {
+				isSet = nextFunc->setNumValue(ImportEntryWrapper::FIRST_THUNK, (-1));
+			}
 		}
 	} //!scope1
 	
 	if (!isSet) {
 		delete nextFunc; nextFunc = NULL;
-		this->undoLastModification();
+		// undo only an operation this call is part of: if it was to start one and stored nothing, the top of the stack is an unrelated, earlier edit
+		if (isBackedUp || continueLastOperation) {
+			this->undoLastModification();
+		}
 		throw CustomException("Failed to add imported function!");
 		return NULL;
 	}
