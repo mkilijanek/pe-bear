@@ -660,7 +660,7 @@ ImportEntryWrapper* PeHandler::_autoAddLibrary(const QString &name, size_t impor
 	const size_t kThunkSeries = separateOFT ? 2 : 1;
 	const size_t kThunkSeriesSize = kThunkSize * (importedFuncsCount + 1); // leave space for X thunks + terminator
 	const size_t kNameRecordPadding = kThunkSeriesSize * kThunkSeries; 
-	const size_t nameTotalSize = name.length() + 1; // name + string '\0' terminator
+	const size_t nameTotalSize = name.toUtf8().size() + 1; // name as written (UTF-8 bytes) + string '\0' terminator
 	while (true) {
 		BYTE *ptr = m_PE->getContentAt(nameOffset, nameTotalSize + kNameRecordPadding);
 		if (!ptr) {
@@ -750,6 +750,13 @@ bool PeHandler::autoAddImports(const ImportsAutoadderSettings &settings)
 	const QStringList dllsList = settings.dllFunctions.keys();
 	const size_t dllsCount = dllsList.size();
 	if (dllsCount == 0) return false;
+
+	for (auto itr = dllsList.begin(); itr != dllsList.end(); ++itr) {
+		if (!ImportsAutoadderSettings::isValidDllName(*itr)) {
+			throw CustomException("Invalid DLL name supplied: only printable ASCII is allowed");
+			return false;
+		}
+	}
 
 	const size_t kDllRecordsSpace = sizeof(IMAGE_IMPORT_DESCRIPTOR) * (dllsCount + 1); // space for Import descriptor for each needed DLL
 	const bool shouldMoveTable = (canAddImportsLib(dllsCount)) ? false : true;
