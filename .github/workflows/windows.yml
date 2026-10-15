@@ -40,9 +40,11 @@ jobs:
       # there is no first-party package manager to get it from. aqtinstall is a
       # plain pip package, so it can be version-pinned here rather than taking
       # a third-party Action into the build of a tool used on untrusted files.
+      # An exact version: a wildcard would let a new release change what
+      # installs Qt without any commit here (3.1.21 is what 3.1.* resolved to).
       - name: Install Qt
         run: |
-          python -m pip install --disable-pip-version-check "aqtinstall==3.1.*"
+          python -m pip install --disable-pip-version-check "aqtinstall==3.1.21"
           python -m aqt install-qt windows desktop ${env:QT_VERSION} ${env:QT_ARCH} -O ${{ github.workspace }}\Qt
 
       # vcpkg is preinstalled on the Windows runners (VCPKG_INSTALLATION_ROOT),

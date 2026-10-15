@@ -21,7 +21,11 @@ concurrency:
 jobs:
   build:
     name: Qt6
-    runs-on: macos-latest
+    # Pinned rather than macos-latest, which GitHub moves to each new macOS
+    # over a migration of weeks, so the same commit could build on two
+    # different SDKs and Xcodes. macos-26 is the arm64 image macos-latest
+    # points to now.
+    runs-on: macos-26
 
     steps:
       # Without submodules the build stops at add_subdirectory(capstone).

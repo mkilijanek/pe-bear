@@ -80,7 +80,7 @@ jobs:
           submodules: recursive
       - name: Install Qt
         run: |
-          python -m pip install --disable-pip-version-check "aqtinstall==3.1.*"
+          python -m pip install --disable-pip-version-check "aqtinstall==3.1.21"
           python -m aqt install-qt windows desktop ${env:QT_VERSION} ${env:QT_ARCH} -O ${{ github.workspace }}\Qt
       - name: Install libarchive
         run: |
