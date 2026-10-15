@@ -22,6 +22,7 @@ Everything runs offline and headless, in well under a second.
 | `tst_stringscollection` | the strings store, including wide-string byte sizes |
 | `tst_treemodel` | `TreeItem` tree bookkeeping and `TreeModel`, with a contract check |
 | `tst_pemodels` | every concrete PE view, under `QAbstractItemModelTester` |
+| `tst_hexdiffmodel` | the Compare window's "next diff" search stays inside both buffers |
 | `tst_dumpfilename` | file names for section dumps: no path or stream characters, one per section |
 
 ## Fixtures are synthesised, not committed

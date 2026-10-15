@@ -72,6 +72,16 @@ public:
 	virtual QString canonicalPath(const QString &path) const = 0;
 	/** Probed, not inferred from permissions bits, which lie on network shares. */
 	virtual bool isWritableDir(const QString &path) const = 0;
+	/**
+	 * True when @p path is a real directory (not a link) that only the current
+	 * user can change: owned by them, not writable by group or others. The
+	 * staging tree lives in the installation's parent, which can be a directory
+	 * other users write to (/tmp, a shared tools folder); whoever owns the
+	 * directory the staged build sits in can swap its files between unpacking
+	 * and activation. Where the platform cannot tell (no ownership on Windows),
+	 * only the link check applies. @p why says which condition failed.
+	 */
+	virtual bool isPrivateDirectory(const QString &path, QString *why = NULL) const = 0;
 
 	/* --- mutations --- */
 	virtual bool makeDir(const QString &path) = 0;
@@ -136,6 +146,7 @@ public:
 	virtual QStringList listDir(const QString &path) const;
 	virtual QString canonicalPath(const QString &path) const;
 	virtual bool isWritableDir(const QString &path) const;
+	virtual bool isPrivateDirectory(const QString &path, QString *why = NULL) const;
 
 	virtual bool makeDir(const QString &path);
 	virtual bool removeFile(const QString &path);
