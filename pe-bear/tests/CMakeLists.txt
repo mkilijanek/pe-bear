@@ -56,6 +56,11 @@ set(deps_treemodel
 	${PB}/gui/TreeModel.cpp
 )
 
+# the Compare window's hex model: QtWidgets, but no PE
+set(deps_hexdiffmodel
+	${PB}/gui/HexDiffModel.cpp
+)
+
 # the concrete PE views pull in the whole non-window half of the application
 set(deps_pemodels
 	${PB}/base/PeHandler.cpp
@@ -115,6 +120,7 @@ set(pebear_tests
 	tst_stringscollection
 	tst_treemodel
 	tst_pemodels
+	tst_hexdiffmodel
 	tst_imphash
 )
 
@@ -129,6 +135,8 @@ foreach(test_name ${pebear_tests})
 		set(test_deps ${deps_stringscollection})
 	elseif(test_name STREQUAL "tst_treemodel")
 		set(test_deps ${deps_treemodel})
+	elseif(test_name STREQUAL "tst_hexdiffmodel")
+		set(test_deps ${deps_hexdiffmodel})
 	elseif(test_name STREQUAL "tst_pemodels" OR test_name STREQUAL "tst_imphash")
 		set(test_deps ${deps_pemodels})
 	else()
