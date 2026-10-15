@@ -84,11 +84,21 @@ MainWindow::MainWindow(MainSettings &_mainSettings, QWidget *parent)
 #endif
 
 	// try to load from alternative files:
-	const QString sigFile1 = this->mainSettings.userDataDir() + QDir::separator() + SIG_FILE;
-	Signature::loadFromFile(sigFile1.toStdString(), this->signatures);
-
-	const QString sigFile2 = QDir::currentPath() + QDir::separator() + SIG_FILE;
-	Signature::loadFromFile(sigFile2.toStdString(), this->signatures);
+	QString sigFile1;
+	if (this->mainSettings.userDataDir().size() > 0) {
+		sigFile1 = this->mainSettings.userDataDir() + QDir::separator() + SIG_FILE;
+		Signature::loadFromFile(sigFile1.toStdString(), this->signatures);
+	}
+	// next to the executable -- not from the current directory, which is wherever PE-bear was started (often a samples directory)
+	const QString sigFile2 = QCoreApplication::applicationDirPath() + QDir::separator() + SIG_FILE;
+	if (QFileInfo(sigFile2) != QFileInfo(sigFile1)) {
+		Signature::loadFromFile(sigFile2.toStdString(), this->signatures);
+	}
+	const QString cwdSigFile = QDir::currentPath() + QDir::separator() + SIG_FILE;
+	if (QFile::exists(cwdSigFile) && QFileInfo(cwdSigFile) != QFileInfo(sigFile1) && QFileInfo(cwdSigFile) != QFileInfo(sigFile2)) {
+		std::cerr << "Signatures not loaded from the current directory: " << cwdSigFile.toStdString()
+			<< " (put " << SIG_FILE << " in the user data directory or next to the executable, or load it from the menu)" << std::endl;
+	}
 	
 	sigFinder.addPatterns(signatures);
 	signWindow.onSigListUpdated();

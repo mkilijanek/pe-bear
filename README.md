@@ -17,6 +17,8 @@ PE-bear is a multiplatform reversing tool for PE files. Its objective is to deli
 Signatures for PE-bear:
 + [SIG.txt](SIG.txt) (updated: Oct 17, 2022) - *contains signatures from [PEid's UserDB](http://www.softpedia.com/get/Programming/Packers-Crypters-Protectors/PEiD-updated.shtml) - converted by a script provided by [crashish](http://crashish.blogspot.com/2013/09/peid-signature-conversion-for-pe-bear.html)*
 
+At startup PE-bear loads `SIG.txt` from the user data directory (if one is set in the settings) and from the directory of the PE-bear executable. It is not read from the current working directory, which may be a directory of untrusted samples; another signature file can be loaded with *Settings → Signatures → Load*.
+
 ## Builds
 
 📦 ⚙️ Download the latest [release](https://github.com/hasherezade/pe-bear/releases).
