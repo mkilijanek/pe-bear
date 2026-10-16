@@ -26,6 +26,7 @@ Everything runs offline and headless, in well under a second.
 | `tst_debugmodel` | the CodeView view's PDB path stays inside the debug data |
 | `tst_cdisasm` | `CDisasm` releases its capstone handle on re-init and destruction |
 | `tst_diffwindow` | the Compare window follows edits that reallocate the PE buffer |
+| `tst_imphash` | the imphash matches pefile's, ASCII and non-ASCII names |
 | `tst_dumpfilename` | file names for section dumps: no path or stream characters, one per section |
 | `tst_importfuncundo` | a failed "add function" does not undo an unrelated edit |
 
