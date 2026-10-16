@@ -166,6 +166,7 @@ protected:
 
 	size_t disasmNext();
 	bool init_capstone(Executable::exe_arch arch, Executable::exe_bits bitMode);
+	void close_capstone();
 	
 	//capstone stuff:
 	std::vector<cs_insn> m_table;

@@ -122,6 +122,7 @@ set(pebear_tests
 	tst_pemodels
 	tst_hexdiffmodel
 	tst_debugmodel
+	tst_cdisasm
 )
 
 foreach(test_name ${pebear_tests})
