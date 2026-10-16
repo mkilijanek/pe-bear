@@ -23,6 +23,7 @@ Everything runs offline and headless, in well under a second.
 | `tst_treemodel` | `TreeItem` tree bookkeeping and `TreeModel`, with a contract check |
 | `tst_pemodels` | every concrete PE view, under `QAbstractItemModelTester` |
 | `tst_hexdiffmodel` | the Compare window's "next diff" search stays inside both buffers |
+| `tst_cdisasm` | `CDisasm` releases its capstone handle on re-init and destruction |
 | `tst_addsection` | a failed "add section" is rolled back, not half applied |
 
 ## Fixtures are synthesised, not committed
