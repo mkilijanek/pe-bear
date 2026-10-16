@@ -121,6 +121,7 @@ set(pebear_tests
 	tst_treemodel
 	tst_pemodels
 	tst_hexdiffmodel
+	tst_debugmodel
 	tst_cdisasm
 )
 
@@ -137,7 +138,7 @@ foreach(test_name ${pebear_tests})
 		set(test_deps ${deps_treemodel})
 	elseif(test_name STREQUAL "tst_hexdiffmodel")
 		set(test_deps ${deps_hexdiffmodel})
-	elseif(test_name STREQUAL "tst_pemodels")
+	elseif(test_name STREQUAL "tst_pemodels" OR test_name STREQUAL "tst_debugmodel")
 		set(test_deps ${deps_pemodels})
 	else()
 		set(test_deps "")
