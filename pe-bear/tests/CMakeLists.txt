@@ -126,6 +126,7 @@ set(pebear_tests
 	tst_treemodel
 	tst_pemodels
 	tst_hexdiffmodel
+	tst_cdisasm
 	tst_dumpfilename
 )
 
