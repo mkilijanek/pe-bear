@@ -64,7 +64,7 @@ public slots:
 
 public:
 	DebugRDSIEntryTreeModel(PeHandler *peHndl, QObject *parent = 0)
-		: WrapperTableModel(peHndl, parent)
+		: WrapperTableModel(peHndl, parent), parentId(0)
 	{
 		connect(peHndl, SIGNAL(modified()), this, SLOT(onNeedReset()));
 	}
