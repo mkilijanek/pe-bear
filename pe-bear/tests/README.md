@@ -23,7 +23,9 @@ Everything runs offline and headless, in well under a second.
 | `tst_treemodel` | `TreeItem` tree bookkeeping and `TreeModel`, with a contract check |
 | `tst_pemodels` | every concrete PE view, under `QAbstractItemModelTester` |
 | `tst_hexdiffmodel` | the Compare window's "next diff" search stays inside both buffers |
+| `tst_debugmodel` | the CodeView view's PDB path stays inside the debug data |
 | `tst_cdisasm` | `CDisasm` releases its capstone handle on re-init and destruction |
+| `tst_diffwindow` | the Compare window follows edits that reallocate the PE buffer |
 | `tst_importfuncundo` | a failed "add function" does not undo an unrelated edit |
 
 ## Fixtures are synthesised, not committed
