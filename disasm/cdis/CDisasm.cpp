@@ -4,13 +4,25 @@ using namespace pe_bear;
 
 CDisasm::CDisasm()
 	: Disasm(),
-	m_insn(NULL)
+	handle(0), m_insn(NULL)
 {
 }
 
 CDisasm::~CDisasm()
 {
 	is_init = false;
+	close_capstone();
+}
+
+void CDisasm::close_capstone()
+{
+	if (m_insn) {
+		cs_free(m_insn, 1);
+		m_insn = NULL;
+	}
+	if (handle) {
+		cs_close(&handle); // also resets the handle to 0
+	}
 }
 
 cs_mode toCSmode(Executable::exe_bits bitMode)
@@ -28,6 +40,9 @@ cs_mode toCSmode(Executable::exe_bits bitMode)
 
 bool CDisasm::init_capstone(Executable::exe_arch arch, Executable::exe_bits bitMode)
 {
+	// init() is called again on every scroll or export: release what the previous call opened
+	close_capstone();
+
 	cs_err err;
 	if (arch == Executable::ARCH_INTEL) {
 		err = cs_open(CS_ARCH_X86, toCSmode(bitMode), &handle);
