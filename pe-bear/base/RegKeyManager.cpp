@@ -26,7 +26,7 @@ bool RegKeyManager::removeRegPath(const std::string &extension, const std::strin
 	res1 = RegDeleteKeyA(hKey, "command");
 	res2 = RegDeleteKeyA(hKey, "");
 
-	res = RegCloseKey(HKEY_CLASSES_ROOT);
+	res = RegCloseKey(hKey);
 	if (res != ERROR_SUCCESS) {
 		return false;
 	}
@@ -55,7 +55,7 @@ bool RegKeyManager::addRegPath(const std::string &extension, const std::string &
 		return false;
 	}
 	res1 = RegSetValueExA(hKey, NULL, 0, REG_SZ, (BYTE*)cmdPath.c_str(), cmdPath.length());
-	res = RegCloseKey(HKEY_CLASSES_ROOT);
+	res = RegCloseKey(hKey);
 	if (res1 != ERROR_SUCCESS || res != ERROR_SUCCESS) {
 		return false;
 	}
@@ -70,7 +70,7 @@ bool RegKeyManager::addRegPath(const std::string &extension, const std::string &
 	const std::string iconPath = path + ",0";
 	res1 = RegSetValueExA(hKey, "Icon", 0, REG_SZ, (BYTE*)iconPath.c_str(), iconPath.length());
 
-	res = RegCloseKey(HKEY_CLASSES_ROOT);
+	res = RegCloseKey(hKey);
 	if (res1 != ERROR_SUCCESS || res != ERROR_SUCCESS) {
 		return false;
 	}
@@ -95,7 +95,7 @@ bool RegKeyManager::isKeySet(const std::string &extension, const std::string &ap
 	if (res != ERROR_SUCCESS) {
 		return false;
 	}
-	res = RegCloseKey(HKEY_CLASSES_ROOT);
+	res = RegCloseKey(hKey);
 	if (res == ERROR_SUCCESS) {
 		return true;
 	}
