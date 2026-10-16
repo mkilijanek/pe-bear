@@ -138,6 +138,7 @@ set(pebear_tests
 	tst_debugmodel
 	tst_cdisasm
 	tst_diffwindow
+	tst_imphash
 	tst_dumpfilename
 )
 
@@ -156,7 +157,7 @@ foreach(test_name ${pebear_tests})
 		set(test_deps ${deps_hexdiffmodel})
 	elseif(test_name STREQUAL "tst_dumpfilename")
 		set(test_deps ${deps_dumpfilename})
-	elseif(test_name STREQUAL "tst_pemodels" OR test_name STREQUAL "tst_debugmodel")
+	elseif(test_name STREQUAL "tst_pemodels" OR test_name STREQUAL "tst_debugmodel" OR test_name STREQUAL "tst_imphash")
 		set(test_deps ${deps_pemodels})
 	elseif(test_name STREQUAL "tst_diffwindow")
 		set(test_deps ${deps_diffwindow})
