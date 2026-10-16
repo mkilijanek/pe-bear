@@ -49,6 +49,7 @@ private slots:
 	void onSliderMoved(int val);
 	void onAddrFormatSelected(int val);
 	void onNextDiff();
+	void onPeModified();
 
 protected:
 	void resizeComponents();
@@ -80,6 +81,9 @@ protected:
 	offset_t contentOffset[CNTR];
 	BYTE* contentPtr[CNTR];
 	size_t contentSize[CNTR];
+
+	BYTE* peContent[CNTR]; // the buffer of the PE shown on each side, as it was when fetched
+	size_t peSize[CNTR];
 
 	QStatusBar statusBar;
 
