@@ -5,6 +5,7 @@
 #include <QTranslator>
 #include "../../HexView.h"
 #include "../../base/RegKeyManager.h"
+#include "../../base/DumpFileName.h"
 
 
 #ifdef _DEBUG
@@ -712,7 +713,7 @@ void MainWindow::exportDisasmFromAllPEs()
 		if (!sec) continue;
 		
 		const QString peName = uniquePeHelper.getUniqueFromName(hndl->getShortName()); //protect against duplicated names
-		const QString secName = sec->mappedName;
+		const QString secName = DumpFileName::sanitize(sec->mappedName);
 		const QString fileName = dirPath + QDir::separator() + peName + "[" + secName + "].txt";
 
 		const offset_t startOff = sec->getContentOffset(Executable::RAW, true);
@@ -1195,8 +1196,8 @@ size_t MainWindow::dumpAllPeSections(PEFile *pe, const QString &dirPath, const Q
 		SectionHdrWrapper *sec = pe->getSecHdr(i);
 		if (!sec) continue;
 
-		QString secName = sec->mappedName;
-		QString fileName = dirPath + QDir::separator() + peName + "[" + secName + "]";
+		// the section name comes from the file: never use it as a path as it is
+		QString fileName = dirPath + QDir::separator() + DumpFileName::forSection(peName, i, sec->mappedName);
 		if (pe->dumpSection(sec, fileName)) dumped++;
 	}
 	return dumped;
