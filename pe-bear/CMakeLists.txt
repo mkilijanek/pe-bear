@@ -82,6 +82,7 @@ set (pebear_base_srcs
 	base/BearVers.cpp
 	base/MainSettings.cpp
 	base/CommentHandler.cpp
+	base/DumpFileName.cpp
 	base/Modification.cpp
 	base/PeHandler.cpp
 	base/PeHandlerFactory.cpp
@@ -93,6 +94,7 @@ set (pebear_base_hdrs
 	base/BearVers.h
 	base/MainSettings.h
 	base/CommentHandler.h
+	base/DumpFileName.h
 	base/Modification.h
 	base/Releasable.h
 	base/PeHandler.h
