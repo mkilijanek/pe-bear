@@ -41,6 +41,13 @@ namespace {
 		return updated.wait(5000);
 	}
 
+	/** Exposes the loader thread, to drive it directly. */
+	class LoaderAccess : public CommentHandler
+	{
+	public:
+		typedef CommentHandler::LoaderThread Loader;
+	};
+
 }; // namespace
 
 class TestCommentHandler : public QObject
@@ -61,8 +68,12 @@ private slots:
 	void keepsACommentContainingTheDelimiter();
 	void skipsMalformedLinesWhileLoading();
 	void loadingReplacesWhatWasThereBefore();
+	void loadedTagsArriveOnTheHandlersThread();
+	void aBreakBeforeTheLoaderStartsIsKept();
 	void refusesToLoadAMissingFile();
 	void savingNothingCreatesNoFile();
+	void deletingEveryLoadedTagIsSaved();
+	void userDataNamesDependOnTheWholePath();
 };
 
 void TestCommentHandler::storesAndReturnsAComment()
@@ -246,6 +257,57 @@ void TestCommentHandler::loadingReplacesWhatWasThereBefore()
 	QCOMPARE(int(handler.commentsNum()), 1);
 }
 
+void TestCommentHandler::loadedTagsArriveOnTheHandlersThread()
+{
+	/* The views read the tags on the GUI thread, some of them without a lock.
+	   The loader thread may parse the file, but the store itself must only
+	   change on the handler's own thread, when the finished load is handed
+	   over -- never while the loader is still running. */
+	QString content;
+	for (int i = 0; i < 2000; i++) {
+		content += QString::number(0x1000 + i, 16) + QLatin1String(";tag\n");
+	}
+	QTemporaryDir dir;
+	const QString path = writeFile(dir, "many.txt", content);
+	QVERIFY(!path.isEmpty());
+
+	CommentHandler handler;
+	QSignalSpy updated(&handler, SIGNAL(commentsUpdated()));
+	QVERIFY(handler.loadFromFile(path));
+
+	/* no event processing here, so nothing can be handed over yet */
+	for (int i = 0; i < 50; i++) {
+		QThread::msleep(10);
+		QCOMPARE(int(handler.getCommentsNum()), 0);
+	}
+	QVERIFY(updated.wait(5000));
+	QCOMPARE(int(handler.getCommentsNum()), 2000);
+	QCOMPARE(handler.getCommentAt(0x1000), QString("tag"));
+
+	Comment first(INVALID_ADDR, "");
+	QVERIFY(handler.getCommentByIndex(0, first));
+	QCOMPARE(first.offset, offset_t(0x1000));
+	QVERIFY(!handler.getCommentByIndex(2000, first));
+}
+
+void TestCommentHandler::aBreakBeforeTheLoaderStartsIsKept()
+{
+	/* clear() -- run by the destructor -- asks a running load to stop. The
+	   request can come before the thread got to run(); it must not be
+	   forgotten there, or closing a file waits for its whole .tag first. */
+	QTemporaryDir dir;
+	const QString path = writeFile(dir, "tags.txt", QLatin1String("1000;one\n2000;two\n"));
+	QVERIFY(!path.isEmpty());
+
+	CommentHandler handler;
+	LoaderAccess::Loader loader(path, &handler);
+	loader.breakReading();
+	loader.start();
+	QVERIFY(loader.wait(5000));
+
+	QCOMPARE(int(handler.commentsNum()), 0);
+}
+
 void TestCommentHandler::refusesToLoadAMissingFile()
 {
 	QTemporaryDir dir;
@@ -263,6 +325,48 @@ void TestCommentHandler::savingNothingCreatesNoFile()
 	CommentHandler handler;
 	QVERIFY2(handler.saveToFile(path), "saving an empty set reported failure");
 	QVERIFY2(!QFile::exists(path), "an empty tag file was created");
+}
+
+void TestCommentHandler::deletingEveryLoadedTagIsSaved()
+{
+	/* Not writing an empty file is right for a sample that never had tags.
+	   For one whose tags came from a file it would bring them all back the
+	   next time it is opened. */
+	QTemporaryDir dir;
+	const QString path = writeFile(dir, "tags.txt", QLatin1String("1000;one\n2000;two\n"));
+	QVERIFY(!path.isEmpty());
+
+	CommentHandler handler;
+	QVERIFY(loadAndWait(handler, path));
+	QCOMPARE(int(handler.commentsNum()), 2);
+
+	handler.setComment(0x1000, "");
+	handler.setComment(0x2000, "");
+	QCOMPARE(int(handler.commentsNum()), 0);
+	QVERIFY(handler.saveToFile(path));
+
+	CommentHandler reader;
+	QVERIFY(loadAndWait(reader, path));
+	QCOMPARE(int(reader.commentsNum()), 0);
+}
+
+void TestCommentHandler::userDataNamesDependOnTheWholePath()
+{
+	/* The user data directory is flat: two samples called "sample.exe" in
+	   different directories must not read and overwrite one tag file. */
+	QTemporaryDir dir;
+	const QString first = QDir(dir.path()).absoluteFilePath("a/sample.exe");
+	const QString second = QDir(dir.path()).absoluteFilePath("b/sample.exe");
+
+	const QString firstName = CommentHandler::userDataFileName(first);
+	QVERIFY(firstName != CommentHandler::userDataFileName(second));
+	QCOMPARE(CommentHandler::userDataFileName(first), firstName);
+
+	/* still recognisable, and a plain file name */
+	QVERIFY(firstName.startsWith(QLatin1String("sample.exe.")));
+	QVERIFY(firstName.endsWith(QLatin1String(".tag")));
+	QVERIFY(!firstName.contains('/'));
+	QVERIFY(!firstName.contains('\\'));
 }
 
 QTEST_GUILESS_MAIN(TestCommentHandler)

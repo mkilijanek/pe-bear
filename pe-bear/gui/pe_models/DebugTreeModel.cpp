@@ -184,8 +184,14 @@ QVariant DebugRDSIEntryTreeModel::data(const QModelIndex &index, int role) const
 			else if (fId == DebugDirCVEntryWrapper::F_CVDBG_PDB) {
 				//TODO: make some decent parsing here
 				char *str_ptr = (char*)wrap->getFieldPtr(fId);
-				if (!str_ptr) return QVariant();
-				return QString(str_ptr);
+				const char *cvPtr = (const char*)wrap->getPtr();
+				if (!str_ptr || !cvPtr || str_ptr < cvPtr) return QVariant();
+				// the name is not necessarily terminated: it ends at the latest where the debug data ends
+				const bufsize_t cvSize = wrap->getSize();
+				const bufsize_t strOffset = bufsize_t(str_ptr - cvPtr);
+				if (strOffset >= cvSize) return QString();
+				const bufsize_t maxLen = qMin<bufsize_t>(cvSize - strOffset, INT_MAX);
+				return QString::fromUtf8(str_ptr, int(qstrnlen(str_ptr, uint(maxLen))));
 			}
 			bool isOk = false;
 			uint64_t val = wrap->getNumValue(fId, &isOk);

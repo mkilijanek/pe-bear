@@ -5,6 +5,7 @@
 #include <QTranslator>
 #include "../../HexView.h"
 #include "../../base/RegKeyManager.h"
+#include "../../base/DumpFileName.h"
 
 
 #ifdef _DEBUG
@@ -84,11 +85,21 @@ MainWindow::MainWindow(MainSettings &_mainSettings, QWidget *parent)
 #endif
 
 	// try to load from alternative files:
-	const QString sigFile1 = this->mainSettings.userDataDir() + QDir::separator() + SIG_FILE;
-	Signature::loadFromFile(sigFile1.toStdString(), this->signatures);
-
-	const QString sigFile2 = QDir::currentPath() + QDir::separator() + SIG_FILE;
-	Signature::loadFromFile(sigFile2.toStdString(), this->signatures);
+	QString sigFile1;
+	if (this->mainSettings.userDataDir().size() > 0) {
+		sigFile1 = this->mainSettings.userDataDir() + QDir::separator() + SIG_FILE;
+		Signature::loadFromFile(sigFile1.toStdString(), this->signatures);
+	}
+	// next to the executable -- not from the current directory, which is wherever PE-bear was started (often a samples directory)
+	const QString sigFile2 = QCoreApplication::applicationDirPath() + QDir::separator() + SIG_FILE;
+	if (QFileInfo(sigFile2) != QFileInfo(sigFile1)) {
+		Signature::loadFromFile(sigFile2.toStdString(), this->signatures);
+	}
+	const QString cwdSigFile = QDir::currentPath() + QDir::separator() + SIG_FILE;
+	if (QFile::exists(cwdSigFile) && QFileInfo(cwdSigFile) != QFileInfo(sigFile1) && QFileInfo(cwdSigFile) != QFileInfo(sigFile2)) {
+		std::cerr << "Signatures not loaded from the current directory: " << cwdSigFile.toStdString()
+			<< " (put " << SIG_FILE << " in the user data directory or next to the executable, or load it from the menu)" << std::endl;
+	}
 	
 	sigFinder.addPatterns(signatures);
 	signWindow.onSigListUpdated();
@@ -712,7 +723,7 @@ void MainWindow::exportDisasmFromAllPEs()
 		if (!sec) continue;
 		
 		const QString peName = uniquePeHelper.getUniqueFromName(hndl->getShortName()); //protect against duplicated names
-		const QString secName = sec->mappedName;
+		const QString secName = DumpFileName::sanitize(sec->mappedName);
 		const QString fileName = dirPath + QDir::separator() + peName + "[" + secName + "].txt";
 
 		const offset_t startOff = sec->getContentOffset(Executable::RAW, true);
@@ -1012,9 +1023,15 @@ bool MainWindow::loadTagsForPe(PeHandler *hndl, QString name)
 		//printf("Tags loaded from file directory\n");
 		return true;
 	}
-	name = this->mainSettings.userDataDir() + QDir::separator() + hndl->getShortName() + ".tag";
+	const QString udd = this->mainSettings.userDataDir() + QDir::separator();
+	name = udd + CommentHandler::userDataFileName(hndl->getFullName());
 	if (hndl->comments.loadFromFile(name)) {
 		//printf("Tags loaded from UDD\n");
+		return true;
+	}
+	// the name used by older versions: the short file name only, shared by all samples of that name
+	name = udd + hndl->getShortName() + ".tag";
+	if (hndl->comments.loadFromFile(name)) {
 		return true;
 	}
 	return true;
@@ -1026,7 +1043,7 @@ bool MainWindow::autoSaveTags(PeHandler *hndl)
 
 	QString name = hndl->getFullName() + ".tag";
 	if (this->mainSettings.userDataDir().size() > 0) {
-		name = this->mainSettings.userDataDir() + QDir::separator() + hndl->getShortName() + ".tag";
+		name = this->mainSettings.userDataDir() + QDir::separator() + CommentHandler::userDataFileName(hndl->getFullName());
 	}
 	if (hndl->comments.saveToFile(name)) {
 		//printf("Autosaved file");
@@ -1195,8 +1212,8 @@ size_t MainWindow::dumpAllPeSections(PEFile *pe, const QString &dirPath, const Q
 		SectionHdrWrapper *sec = pe->getSecHdr(i);
 		if (!sec) continue;
 
-		QString secName = sec->mappedName;
-		QString fileName = dirPath + QDir::separator() + peName + "[" + secName + "]";
+		// the section name comes from the file: never use it as a path as it is
+		QString fileName = dirPath + QDir::separator() + DumpFileName::forSection(peName, i, sec->mappedName);
 		if (pe->dumpSection(sec, fileName)) dumped++;
 	}
 	return dumped;

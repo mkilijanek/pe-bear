@@ -1,4 +1,5 @@
 #ifdef _WINDOWS
+#include <QString>
 #include <windows.h>
 #include <stdio.h>
 #include <strsafe.h>
@@ -8,6 +9,16 @@
 
 std::string PART = "file\\shell\\Open with ";
 
+#ifdef _WINDOWS
+// The registry is written through the W API: the strings come in as UTF-8 (the
+// application path from QString::toStdString()), which the A API would read in
+// the system ANSI code page and mangle for any non-ASCII install path.
+static std::wstring toWide(const std::string &utf8)
+{
+	return QString::fromUtf8(utf8.c_str(), int(utf8.size())).toStdWString();
+}
+#endif //_WINDOWS
+
 bool RegKeyManager::removeRegPath(const std::string &extension, const std::string &appName)
 {
 #ifdef _WINDOWS
@@ -16,17 +27,17 @@ bool RegKeyManager::removeRegPath(const std::string &extension, const std::strin
 
 	std::string fullName = extension;
 	fullName.append(PART).append(appName);
-	LPCSTR lpSubKey = fullName.c_str();
+	const std::wstring subKey = toWide(fullName);
 
-	LONG res = RegCreateKeyA(HKEY_CLASSES_ROOT, lpSubKey, &hKey);
+	LONG res = RegCreateKeyW(HKEY_CLASSES_ROOT, subKey.c_str(), &hKey);
 	if (res != ERROR_SUCCESS) {
 		return false;
 	}
 
-	res1 = RegDeleteKeyA(hKey, "command");
-	res2 = RegDeleteKeyA(hKey, "");
+	res1 = RegDeleteKeyW(hKey, L"command");
+	res2 = RegDeleteKeyW(hKey, L"");
 
-	res = RegCloseKey(HKEY_CLASSES_ROOT);
+	res = RegCloseKey(hKey);
 	if (res != ERROR_SUCCESS) {
 		return false;
 	}
@@ -49,28 +60,29 @@ bool RegKeyManager::addRegPath(const std::string &extension, const std::string &
 	const std::string cmdName = fullName + "\\command";
 
 	// set command:
-	const std::string cmdPath = path + " \"%1\"";
-	LONG res = RegCreateKeyA(HKEY_CLASSES_ROOT, cmdName.c_str(), &hKey);
+	const std::wstring cmdPath = toWide(path + " \"%1\"");
+	LONG res = RegCreateKeyW(HKEY_CLASSES_ROOT, toWide(cmdName).c_str(), &hKey);
 	if (res != ERROR_SUCCESS) {
 		return false;
 	}
-	res1 = RegSetValueExA(hKey, NULL, 0, REG_SZ, (BYTE*)cmdPath.c_str(), cmdPath.length());
-	res = RegCloseKey(HKEY_CLASSES_ROOT);
+	// REG_SZ: the size is in bytes and includes the terminating null
+	res1 = RegSetValueExW(hKey, NULL, 0, REG_SZ, (const BYTE*)cmdPath.c_str(), DWORD((cmdPath.length() + 1) * sizeof(wchar_t)));
+	res = RegCloseKey(hKey);
 	if (res1 != ERROR_SUCCESS || res != ERROR_SUCCESS) {
 		return false;
 	}
 	
 	//set icon:
 	hKey = 0;
-	res = RegCreateKeyA(HKEY_CLASSES_ROOT, fullName.c_str(), &hKey);
+	res = RegCreateKeyW(HKEY_CLASSES_ROOT, toWide(fullName).c_str(), &hKey);
 	if (res != ERROR_SUCCESS) {
 		return false;
 	}
 
-	const std::string iconPath = path + ",0";
-	res1 = RegSetValueExA(hKey, "Icon", 0, REG_SZ, (BYTE*)iconPath.c_str(), iconPath.length());
+	const std::wstring iconPath = toWide(path + ",0");
+	res1 = RegSetValueExW(hKey, L"Icon", 0, REG_SZ, (const BYTE*)iconPath.c_str(), DWORD((iconPath.length() + 1) * sizeof(wchar_t)));
 
-	res = RegCloseKey(HKEY_CLASSES_ROOT);
+	res = RegCloseKey(hKey);
 	if (res1 != ERROR_SUCCESS || res != ERROR_SUCCESS) {
 		return false;
 	}
@@ -89,13 +101,13 @@ bool RegKeyManager::isKeySet(const std::string &extension, const std::string &ap
 	HKEY hKey = 0;
 	std::string fullName = extension;
 	fullName.append(PART).append(appName);
-	LPCSTR lpSubKey = fullName.c_str();
+	const std::wstring subKey = toWide(fullName);
 
-	LONG res = RegOpenKeyExA(HKEY_CLASSES_ROOT, lpSubKey, 0, KEY_READ, &hKey);
+	LONG res = RegOpenKeyExW(HKEY_CLASSES_ROOT, subKey.c_str(), 0, KEY_READ, &hKey);
 	if (res != ERROR_SUCCESS) {
 		return false;
 	}
-	res = RegCloseKey(HKEY_CLASSES_ROOT);
+	res = RegCloseKey(hKey);
 	if (res == ERROR_SUCCESS) {
 		return true;
 	}

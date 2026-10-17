@@ -24,6 +24,13 @@ PEFileTreeItem::PEFileTreeItem(PeHandler *peHndl, level_t level, enum PEFileFiel
 	}
 }
 
+PEFileTreeItem::~PEFileTreeItem()
+{
+	// ~TreeItem deletes the children only after this part is gone, so the
+	// entry point item must not call back into it from its own destructor.
+	if (entryPointItem) entryPointItem->mainItem = NULL;
+}
+
 PEFileTreeItem* PEFileTreeItem::findNodeByRole(int my_role)
 {
 	PEFileTreeItem *searchedNode = NULL;
@@ -365,7 +372,7 @@ QVariant PEFileTreeItem::data(int column) const
 //-------------------
 
 PEFileSectionsTreeItem::PEFileSectionsTreeItem(PeHandler *peHndl, level_t level, int secIndx, PEFileTreeItem *parent)
-	: PEFileTreeItem(peHndl, level, role = PEFILE_SECTIONS, parent)
+	: PEFileTreeItem(peHndl, level, PEFILE_SECTIONS, parent)
 {
 	SectionHdrWrapper* entrySec = m_PE->getEntrySection();
 	this->secIndx = secIndx;
@@ -498,7 +505,7 @@ bufsize_t PEFileSectionsTreeItem::getContentSize() const
 //-----------------------------------------------------------------------------
 
 PEFileEntryPointItem::PEFileEntryPointItem(PeHandler *peHndl, PEFileTreeItem *mainIt, PEFileTreeItem *parent)
-	 : PEFileTreeItem(peHndl, level, role = PEFILE_NONE, parent), mainItem(mainIt)
+	: PEFileTreeItem(peHndl, DESC, PEFILE_NONE, parent), mainItem(mainIt)
 {
 	PEFile *pe = this->myPeHndl->getPe();
 	if (!pe) return;
@@ -567,7 +574,7 @@ bufsize_t PEFileEntryPointItem::getContentSize() const
 //-----------------------------------------
 
 PEFileNTHdrTreeItem::PEFileNTHdrTreeItem(PeHandler *peHndl, level_t level, enum PEFileNTHdrFieldId subrole, PEFileTreeItem *parent)
-	: PEFileTreeItem(peHndl, level, role = PEFILE_IMG_NT_HDRS, parent)
+	: PEFileTreeItem(peHndl, level, PEFILE_IMG_NT_HDRS, parent)
 {
 	this->subrole = subrole;
 	

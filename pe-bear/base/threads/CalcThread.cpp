@@ -51,8 +51,11 @@ QString CalcThread::makeImpHash(PEFile* pe)
 
 	const QString allImps = impsBlock.join(",");
 	//std::cout << allImps.toStdString() << "\n";
+	// hash every byte of the UTF-8 form, as pefile does (",".join(...).encode()):
+	// length() counts characters, which is fewer once a name is not plain ASCII
+	const QByteArray allImpsBytes = allImps.toUtf8();
 	QCryptographicHash calcHash(QCryptographicHash::Md5);
-	calcHash.addData((const char*) allImps.toStdString().c_str(), allImps.length());
+	calcHash.addData(allImpsBytes);
 	return QString(calcHash.result().toHex());
 }
 
