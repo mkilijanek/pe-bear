@@ -132,6 +132,19 @@ Installer::Outcome Installer::prepareAndActivate(const VerifiedUpdate &update)
 	}
 	m_fs->restrictToOwner(stagingRoot);
 
+	/* The root sits beside the installation, so it is in a directory this user
+	   may not be the only one to write to. A root somebody else created first --
+	   as a link, or as their own directory -- would hold the staged build in a
+	   place they can change between unpacking and activation. makeDir accepts
+	   an existing directory without asking whose it is, so that is asked here.
+	   Checked after restrictToOwner so that a root of ours that was merely
+	   created under a permissive umask has already been tightened. */
+	QString notPrivate;
+	if (!m_fs->isPrivateDirectory(stagingRoot, &notPrivate)) {
+		return abandon(QLatin1String("the staging directory is not private to this user: ")
+			+ notPrivate);
+	}
+
 	/* 4. Staged while the installation is still untouched, so a package that
 	      will not unpack costs nothing. */
 	QList<TransactionOp> stagingOps;
