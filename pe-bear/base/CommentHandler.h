@@ -52,7 +52,7 @@ protected:
 	{
 	public:
 		LoaderThread(QString filePath, CommentHandler *handler)
-			: cmntHndl(handler), fPath(filePath)
+			: cmntHndl(handler), fPath(filePath), isBreakReading(false)
 		{
 		}
 		
