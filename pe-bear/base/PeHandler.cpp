@@ -232,7 +232,7 @@ void  PeHandler::undoDisplayOffset()
 {
 	if (this->prevOffsets.size() == 0) return;
 
-	uint32_t prevOff =  this->prevOffsets.top();
+	offset_t prevOff = this->prevOffsets.top();
 	this->prevOffsets.pop();
 	this->displayedOffset = prevOff;
 //	emit displayAreaModified(this->displayedOffset, this->displayedSize);
