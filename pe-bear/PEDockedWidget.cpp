@@ -1,5 +1,6 @@
 #include "PEDockedWidget.h"
 #include "gui_base/AddressInputDialog.h"
+#include "base/DumpFileName.h"
 
 PEDockedWidget::PEDockedWidget(PeHandler *peHndl, QWidget *parent)
 	: PeViewItem(peHndl),  QDockWidget(parent),
@@ -328,7 +329,7 @@ void SectionMenu::dumpSelectedSection()
 	QString outDir = mainSettings.dirDump;
 	if (outDir == "") outDir = peHndl->getDirPath();
 
-	QString defaultPath = outDir + QDir::separator() + peHndl->getShortName() + "[" + selectedSection->mappedName + "]";
+	QString defaultPath = outDir + QDir::separator() + peHndl->getShortName() + "[" + DumpFileName::sanitize(selectedSection->mappedName) + "]";
 	QString path = QFileDialog::getSaveFileName(this, tr("Save as..."), defaultPath);
 	if (path.size() == 0) return;
 
@@ -346,7 +347,7 @@ void SectionMenu::exportSectionDisasm()
 	QString outDir = mainSettings.dirDump;
 	if (outDir == "") outDir = peHndl->getDirPath();
 
-	QString defaultPath = outDir + QDir::separator() + peHndl->getShortName() + "[" + selectedSection->mappedName + "].txt";
+	QString defaultPath = outDir + QDir::separator() + peHndl->getShortName() + "[" + DumpFileName::sanitize(selectedSection->mappedName) + "].txt";
 	QString path = QFileDialog::getSaveFileName(this, tr("Save disasembly as..."), defaultPath);
 	if (path.size() == 0) return;
 

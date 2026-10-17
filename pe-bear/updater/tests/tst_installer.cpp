@@ -190,6 +190,7 @@ private slots:
 	void theRecordIsWrittenBeforeTheStagingRootExists();
 	void aRootThatCannotBeCreatedClosesTheRecord();
 	void aRefusedJournalLeavesNoStagingRoot();
+	void aStagingRootThatIsNotPrivateIsNotUsed();
 
 	void confirmValidatedCommitsAndDropsTheBackup();
 	void confirmValidatedRefusedBeforeActivation();
@@ -593,6 +594,31 @@ void TestInstaller::aRefusedJournalLeavesNoStagingRoot()
 	QVERIFY(journal.listIds().isEmpty());
 	QVERIFY2(!fs.hasDir(QLatin1String("/var/pe-bear-updates/staging")),
 		"a refused journal still left a staging root behind");
+	QCOMPARE(fs.contentOf(QLatin1String("/opt/pe-bear/PE-bear")), QByteArray("old-binary"));
+}
+
+void TestInstaller::aStagingRootThatIsNotPrivateIsNotUsed()
+{
+	/* The root is beside the installation, in a directory that may be shared.
+	   One that somebody else created first -- a link, or their own directory --
+	   would hold the staged build where they can change it between unpacking
+	   and activation, so nothing may be unpacked into it. */
+	FakeFileSystem fs;
+	installTarget(fs);
+	FakePlatform platform(&fs);
+	TransactionJournal journal(&fs, paths().transactionsDir());
+	Installer inst(&fs, &platform, &journal, paths());
+	inst.setInstallation(portableAt(QLatin1String(TARGET)));
+
+	fs.markNotPrivate(paths().stagingDir());
+	const Installer::Outcome outcome = inst.prepareAndActivate(update());
+
+	/* a record exists by then, so "untouched" would be untrue; it is closed */
+	QCOMPARE(outcome, Installer::FailedRolledBack);
+	QCOMPARE(inst.transaction().state(), TxRolledBack);
+	QVERIFY2(inst.lastError().contains(QLatin1String("not private")), qPrintable(inst.lastError()));
+	QVERIFY2(!platform.calls().contains(QLatin1String("prepareStaging")),
+		"the package was unpacked into a directory somebody else controls");
 	QCOMPARE(fs.contentOf(QLatin1String("/opt/pe-bear/PE-bear")), QByteArray("old-binary"));
 }
 

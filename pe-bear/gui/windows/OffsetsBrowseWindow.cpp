@@ -26,9 +26,8 @@ Qt::ItemFlags OffsetsBrowseModel::flags(const QModelIndex &index) const
 
 int OffsetsBrowseModel::rowCount(const QModelIndex &parent) const 
 {
-	CommentHandler &cHndl = myPeHndl->comments;
-	size_t num = cHndl.commentsVec.size();
-	return num;
+	if (myPeHndl == NULL) return 0;
+	return int(myPeHndl->comments.getCommentsNum());
 }
 
 QVariant OffsetsBrowseModel::data(const QModelIndex &index, int role) const
@@ -39,25 +38,22 @@ QVariant OffsetsBrowseModel::data(const QModelIndex &index, int role) const
 	int row = index.row();
 	int column = index.column();
 	
-	CommentHandler &cHndl = myPeHndl->comments;
-	if (row >= cHndl.commentsVec.size()) return QVariant();
-
-	Comment *cmnt = cHndl.commentsVec[row];
-	if (cmnt == NULL) return QVariant();
+	Comment cmnt(INVALID_ADDR, "");
+	if (row < 0 || !myPeHndl->comments.getCommentByIndex(row, cmnt)) return QVariant();
 
 	if (role == Qt::BackgroundRole && column == COL_OFFSET) {
 		Executable::addr_type aT = addrTypeAt(index);
-		if (m_PE->toRaw(cmnt->offset, aT) == INVALID_ADDR) return this->errColor;
+		if (m_PE->toRaw(cmnt.offset, aT) == INVALID_ADDR) return this->errColor;
 	}
 	if (role != Qt::DisplayRole && role != Qt::EditRole && role != Qt::ToolTipRole) return QVariant();
 
 	switch (column) {
 			case COL_OFFSET :
-				return QString::number(cmnt->offset, 16);
+				return QString::number(cmnt.offset, 16);
 			case COL_ID : 
-				return cmnt->id;
+				return cmnt.id;
 			case COL_NAME : 
-				return cmnt->content;
+				return cmnt.content;
 	}
 	return QVariant();
 }
@@ -70,10 +66,10 @@ bool OffsetsBrowseModel::setData(const QModelIndex &index, const QVariant &value
 	int column = index.column();
 	if (column != COL_NAME) return false;
 
-	Comment *cmnt = myPeHndl->comments.commentsVec[row];
-	if (cmnt == NULL) return false;
+	Comment cmnt(INVALID_ADDR, "");
+	if (row < 0 || !myPeHndl->comments.getCommentByIndex(row, cmnt)) return false;
 
-	myPeHndl->comments.setComment(cmnt->offset, value.toString());
+	myPeHndl->comments.setComment(cmnt.offset, value.toString());
 	return true;
 }
 
@@ -81,11 +77,10 @@ offset_t OffsetsBrowseModel::getFieldOffset(QModelIndex index) const
 {
 	if (myPeHndl == NULL) return INVALID_ADDR;
 
-	CommentHandler &cHndl = myPeHndl->comments;
-	Comment *cmnt = cHndl.commentsVec[index.row()];
-	if (cmnt == NULL) return INVALID_ADDR;
+	Comment cmnt(INVALID_ADDR, "");
+	if (index.row() < 0 || !myPeHndl->comments.getCommentByIndex(index.row(), cmnt)) return INVALID_ADDR;
 
-	return m_PE->toRaw(cmnt->offset, Executable::RVA);
+	return m_PE->toRaw(cmnt.offset, Executable::RVA);
 }
 
 bufsize_t OffsetsBrowseModel::getFieldSize(QModelIndex index) const
