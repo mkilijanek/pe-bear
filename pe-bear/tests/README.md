@@ -28,6 +28,7 @@ Everything runs offline and headless, in well under a second.
 | `tst_diffwindow` | the Compare window follows edits that reallocate the PE buffer |
 | `tst_imphash` | the imphash matches pefile's, ASCII and non-ASCII names |
 | `tst_dumpfilename` | file names for section dumps: no path or stream characters, one per section |
+| `tst_addsection` | a failed "add section" is rolled back, not half applied |
 | `tst_importfuncundo` | a failed "add function" does not undo an unrelated edit |
 
 ## Fixtures are synthesised, not committed

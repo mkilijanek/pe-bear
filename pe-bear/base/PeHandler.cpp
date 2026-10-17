@@ -469,6 +469,7 @@ bool PeHandler::copyVirtualSizesToRaw()
 SectionHdrWrapper* PeHandler::addSection(QString name, bufsize_t rSize, bufsize_t vSize) //throws exception
 {
 	SectionHdrWrapper* newSec = nullptr;
+	const size_t operationsBefore = this->modifHndl.countOperations();
 	try {
 		offset_t modOffset = this->optHdrWrapper.getFieldOffset(OptHdrWrapper::IMAGE_SIZE);
 		bufsize_t modSize = this->optHdrWrapper.getFieldSize(OptHdrWrapper::IMAGE_SIZE);
@@ -488,12 +489,13 @@ SectionHdrWrapper* PeHandler::addSection(QString name, bufsize_t rSize, bufsize_
 		
 		newSec = m_PE->addNewSection(name, rSize, vSize);
 	} catch (const CustomException &e) {
-		this->modifHndl.unStoreLast();
+		// roll back what was already changed (i.e. SizeOfImage), using the backup made above
+		if (this->modifHndl.countOperations() > operationsBefore) this->unModify();
 		throw (e); // rethrow the exception to exit from the function
 	}
 
 	if (!newSec) { // in case if adding section has failed, but not because of an exception thrown
-		this->modifHndl.unStoreLast();
+		if (this->modifHndl.countOperations() > operationsBefore) this->unModify();
 		throw CustomException("Cannot add new section!");
 	}
 	emit modified();
