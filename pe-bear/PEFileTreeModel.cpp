@@ -24,6 +24,13 @@ PEFileTreeItem::PEFileTreeItem(PeHandler *peHndl, level_t level, enum PEFileFiel
 	}
 }
 
+PEFileTreeItem::~PEFileTreeItem()
+{
+	// ~TreeItem deletes the children only after this part is gone, so the
+	// entry point item must not call back into it from its own destructor.
+	if (entryPointItem) entryPointItem->mainItem = NULL;
+}
+
 PEFileTreeItem* PEFileTreeItem::findNodeByRole(int my_role)
 {
 	PEFileTreeItem *searchedNode = NULL;

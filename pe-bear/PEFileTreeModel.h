@@ -43,6 +43,7 @@ public:
 	typedef enum ViewLevel level_t;
 
 	PEFileTreeItem(PeHandler *peHndl, level_t level = DESC, PEFileFieldId role = PEFILE_NONE, PEFileTreeItem *parent = NULL);
+	virtual ~PEFileTreeItem();
 
 	bool attachIfBelongs(PEFileTreeItem *child);
 	int columnCount() const;
