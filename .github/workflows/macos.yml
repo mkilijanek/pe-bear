@@ -30,7 +30,7 @@ jobs:
     steps:
       # Without submodules the build stops at add_subdirectory(capstone).
       - name: Check out, including submodules
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           submodules: recursive
 
