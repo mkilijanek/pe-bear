@@ -195,6 +195,8 @@ bool CommentHandler::getCommentByIndex(size_t indx, Comment &out)
 
 void CommentHandler::onLoaded()
 {
+	// the tags now come from a file: saving an empty set must overwrite it
+	this->isLoaded = true;
 	if (this->t) {
 		this->t->wait();
 		QMutexLocker ml(&m_loadMutex);
