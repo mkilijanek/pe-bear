@@ -68,6 +68,7 @@ private slots:
 	void keepsACommentContainingTheDelimiter();
 	void skipsMalformedLinesWhileLoading();
 	void loadingReplacesWhatWasThereBefore();
+	void loadedTagsArriveOnTheHandlersThread();
 	void aBreakBeforeTheLoaderStartsIsKept();
 	void refusesToLoadAMissingFile();
 	void savingNothingCreatesNoFile();
@@ -252,6 +253,39 @@ void TestCommentHandler::loadingReplacesWhatWasThereBefore()
 	QVERIFY2(handler.getCommentAt(0x1000).isEmpty(),
 		"loading a file left earlier tags behind");
 	QCOMPARE(int(handler.commentsNum()), 1);
+}
+
+void TestCommentHandler::loadedTagsArriveOnTheHandlersThread()
+{
+	/* The views read the tags on the GUI thread, some of them without a lock.
+	   The loader thread may parse the file, but the store itself must only
+	   change on the handler's own thread, when the finished load is handed
+	   over -- never while the loader is still running. */
+	QString content;
+	for (int i = 0; i < 2000; i++) {
+		content += QString::number(0x1000 + i, 16) + QLatin1String(";tag\n");
+	}
+	QTemporaryDir dir;
+	const QString path = writeFile(dir, "many.txt", content);
+	QVERIFY(!path.isEmpty());
+
+	CommentHandler handler;
+	QSignalSpy updated(&handler, SIGNAL(commentsUpdated()));
+	QVERIFY(handler.loadFromFile(path));
+
+	/* no event processing here, so nothing can be handed over yet */
+	for (int i = 0; i < 50; i++) {
+		QThread::msleep(10);
+		QCOMPARE(int(handler.getCommentsNum()), 0);
+	}
+	QVERIFY(updated.wait(5000));
+	QCOMPARE(int(handler.getCommentsNum()), 2000);
+	QCOMPARE(handler.getCommentAt(0x1000), QString("tag"));
+
+	Comment first(INVALID_ADDR, "");
+	QVERIFY(handler.getCommentByIndex(0, first));
+	QCOMPARE(first.offset, offset_t(0x1000));
+	QVERIFY(!handler.getCommentByIndex(2000, first));
 }
 
 void TestCommentHandler::aBreakBeforeTheLoaderStartsIsKept()
