@@ -1,0 +1,74 @@
+# The test suite under AddressSanitizer and UndefinedBehaviorSanitizer.
+#
+# The other workflows build Release, where asserts are compiled out and an
+# out-of-bounds read only shows up if it happens to crash. Here the same
+# tests run in a Debug build with both sanitizers, so a read one byte past a
+# buffer, a use after free or undefined behaviour fails the test that
+# triggered it.
+name: Sanitizers
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sanitizers-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  asan-ubsan:
+    name: ASan+UBSan / Debug / clang / Qt5
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Check out, including submodules
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          submodules: recursive
+          persist-credentials: false
+
+      # libclang-rt-18-dev carries the sanitizer runtimes; without it clang
+      # cannot link -fsanitize=address.
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            cmake ninja-build clang libclang-rt-18-dev libarchive-dev qtbase5-dev
+
+      # -fno-sanitize-recover=undefined: a UBSan report fails the test
+      # instead of only printing. -fno-sanitize=alignment: bearparser reads
+      # every field through a cast pointer into the file buffer
+      # (AbstractByteBuffer.cpp, Util.cpp), so every test that opens a PE
+      # stops on a misaligned load, which x86 and ARM64 handle in hardware;
+      # the remaining checks are the ones this job is for. Capstone (C) is
+      # instrumented too, as PE-bear calls into it with file contents.
+      - name: Configure
+        env:
+          SAN_FLAGS: -fsanitize=address,undefined -fno-sanitize=alignment -fno-sanitize-recover=undefined -fno-omit-frame-pointer
+        run: >
+          cmake -S . -B build -G Ninja
+          -DCMAKE_BUILD_TYPE=Debug
+          -DCMAKE_C_COMPILER=clang
+          -DCMAKE_CXX_COMPILER=clang++
+          "-DCMAKE_C_FLAGS=$SAN_FLAGS"
+          "-DCMAKE_CXX_FLAGS=$SAN_FLAGS"
+          -DUSE_QT5=ON
+          -DPEBEAR_BUILD_TESTS=ON
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      # detect_leaks=0: with LeakSanitizer on, 3 of the 38 tests fail at exit
+      # on allocations nobody frees -- Qt's offscreen platform plugin keeps
+      # its screen objects, and DOSExe::wrap (bearparser) leaks a wrapper.
+      # Leaks are not what this job is for; memory errors and UB are.
+      - name: Test
+        env:
+          QT_QPA_PLATFORM: offscreen
+          ASAN_OPTIONS: detect_leaks=0:strict_string_checks=1:detect_stack_use_after_return=1
+          UBSAN_OPTIONS: print_stacktrace=1
+        run: ctest --test-dir build --output-on-failure --no-tests=error
