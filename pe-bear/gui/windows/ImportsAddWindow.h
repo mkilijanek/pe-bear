@@ -148,6 +148,7 @@ protected:
 		propertyLayout5,
 		propertyLayout6;
 
+	QRegularExpressionValidator *dllNameValidator;
 	QRegularExpressionValidator *funcNameValidator;
 
 	QHBoxLayout buttonLayout1;

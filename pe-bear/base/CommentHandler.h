@@ -50,6 +50,7 @@ public:
 
 	std::vector<Comment*> commentsVec;
 	size_t getCommentsNum();
+	bool getCommentByIndex(size_t indx, Comment &out);
 
 protected:
 	// BEGIN inner class: LoaderThread
@@ -57,11 +58,14 @@ protected:
 	{
 	public:
 		LoaderThread(QString filePath, CommentHandler *handler)
-			: cmntHndl(handler), fPath(filePath)
+			: cmntHndl(handler), fPath(filePath), isBreakReading(false)
 		{
 		}
 		
 		void breakReading();
+
+		// filled by the thread; read on the GUI thread only after it finished
+		std::map<offset_t, QString> loadedComments;
 		
 	private:
 		void run();

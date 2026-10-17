@@ -40,6 +40,10 @@ DiffWindow::DiffWindow(PeHandlersManager &peMngr, QWidget *parent)
     : QMainWindow(parent), peManger(peMngr),
     hexDumpModelL(LEFT), hexDumpModelR(RIGHT)
 {
+	for (int viewIndx = 0; viewIndx < CNTR; viewIndx++) {
+		peContent[viewIndx] = NULL;
+		peSize[viewIndx] = 0;
+	}
 
 	QStringList commands;
 	commands << "Raw" << "Relative ($+)";
@@ -270,6 +274,27 @@ void DiffWindow::onNextDiff()
 	hexDumpModelR.onGoToNextDiff();
 }
 
+void DiffWindow::onPeModified()
+{
+	PeHandler *hndl = qobject_cast<PeHandler*>(sender());
+
+	for (int viewIndx = 0; viewIndx < CNTR; viewIndx++) {
+		if (currName[viewIndx].size() == 0) continue;
+		PeHandler *shown = this->peManger.getByName(currName[viewIndx]);
+		if (!shown || (hndl && shown != hndl)) continue;
+
+		PEFile *pe = shown->getPe();
+		if (pe && pe->getContent() == peContent[viewIndx] && pe->getRawSize() == peSize[viewIndx]) {
+			continue; // the buffer was neither moved nor resized: the pointers held are still valid
+		}
+		// the content of the marked item may have moved or changed size: show the whole file again
+		contentPtr[viewIndx] = NULL;
+		contentSize[viewIndx] = 0;
+		contentOffset[viewIndx] = 0;
+		setPEContent(currName[viewIndx], 0, ContentIndx(viewIndx));
+	}
+}
+
 void DiffWindow::destroyActions()
 {
 	delete setHexView;
@@ -326,6 +351,10 @@ void DiffWindow::refresh()
 	for (peItr = hndlMap.begin(); peItr != hndlMap.end(); ++peItr) {
 		QString name = peItr->second->getFullName();
 		stringsList.append(name);
+
+		// edits may reallocate the PE buffer: the pointers held here must be fetched again
+		connect(peItr->second, SIGNAL(modified()), this, SLOT(onPeModified()), Qt::UniqueConnection);
+		connect(peItr->second, SIGNAL(secHeadersModified()), this, SLOT(onPeModified()), Qt::UniqueConnection);
 	}
 
 	fileCombo[LEFT].addItems(stringsList);
@@ -397,6 +426,8 @@ void DiffWindow::setPEContent(const QString &name, int offset, ContentIndx conte
 	}
 	BYTE* content = pe->getContent();
 	int size = pe->getRawSize();
+	peContent[contentIndx] = content;
+	peSize[contentIndx] = pe->getRawSize();
 	if (content == NULL)
 		emit contentChanged(NULL, 0, 0, contentIndx);
 	else
