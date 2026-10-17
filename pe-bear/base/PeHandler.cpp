@@ -937,6 +937,7 @@ ImportedFuncWrapper* PeHandler::_addImportFunc(ImportEntryWrapper *lib, bool con
 
 	ImportedFuncWrapper *nextFunc = NULL;
 	bool isSet = false;
+	bool isBackedUp = false;
 
 	{ //scope1
 		// create a temporary wrapper to help filling in the space:
@@ -946,21 +947,27 @@ ImportedFuncWrapper* PeHandler::_addImportFunc(ImportEntryWrapper *lib, bool con
 		bufsize_t fieldSize = nextFunc->getFieldSize(ImportedFuncWrapper::THUNK);
 
 		if (offset && offset != INVALID_ADDR && fieldSize) {
-			backupModification(offset, fieldSize, continueLastOperation);
-			isSet = nextFunc->setNumValue(ImportedFuncWrapper::THUNK, (-1));
+			isBackedUp = this->modifHndl.backupModification(offset, fieldSize, continueLastOperation);
+			if (isBackedUp) {
+				isSet = nextFunc->setNumValue(ImportedFuncWrapper::THUNK, (-1));
+			}
 		}
 		// ...and the parallel one in the Original First Thunk array, if the library has it:
 		const offset_t origOffset = nextFunc->getFieldOffset(ImportedFuncWrapper::ORIG_THUNK);
 		const bufsize_t origSize = nextFunc->getFieldSize(ImportedFuncWrapper::ORIG_THUNK);
 		if (isSet && origOffset && origOffset != INVALID_ADDR && origOffset != offset && origSize) {
-			backupModification(origOffset, origSize, true);
-			isSet = nextFunc->setNumValue(ImportedFuncWrapper::ORIG_THUNK, (-1));
+			// the First Thunk slot is already claimed: a twin that cannot be backed up fails the call, and the undo below runs
+			isSet = this->modifHndl.backupModification(origOffset, origSize, true)
+				&& nextFunc->setNumValue(ImportedFuncWrapper::ORIG_THUNK, (-1));
 		}
 	} //!scope1
 	
 	if (!isSet) {
 		delete nextFunc; nextFunc = NULL;
-		this->undoLastModification();
+		// undo only an operation this call is part of: if it was to start one and stored nothing, the top of the stack is an unrelated, earlier edit
+		if (isBackedUp || continueLastOperation) {
+			this->undoLastModification();
+		}
 		throw CustomException("Failed to add imported function!");
 		return NULL;
 	}

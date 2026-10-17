@@ -31,6 +31,7 @@ Everything runs offline and headless, in well under a second.
 | `tst_addsection` | a failed "add section" is rolled back, not half applied |
 | `tst_importfunc` | "add function" claims and backs up both thunk slots |
 | `tst_importwizard` | the imports wizard refuses DLL names it cannot size |
+| `tst_importfuncundo` | a failed "add function" does not undo an unrelated edit |
 
 ## Fixtures are synthesised, not committed
 
