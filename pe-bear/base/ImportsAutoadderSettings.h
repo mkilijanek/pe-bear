@@ -32,12 +32,23 @@ struct ImportsAutoadderSettings
 		return true;
 	}
 	
+	/* DLL names are written as single-byte strings: only printable ASCII is accepted */
+	static bool isValidDllName(const QString &dll)
+	{
+		if (dll.length() == 0) return false;
+		for (int i = 0; i < dll.length(); i++) {
+			const ushort c = dll.at(i).unicode();
+			if (c < 0x20 || c > 0x7E) return false;
+		}
+		return true;
+	}
+
 	size_t calcDllNamesSpace() const
 	{
 		size_t areaSize = 0;
 		for (auto itr = dllFunctions.begin(); itr != dllFunctions.end(); ++itr) {
 			const QString dllName = itr.key();
-			areaSize += (dllName.length() + 1);
+			areaSize += (dllName.toUtf8().size() + 1); // written as UTF-8: count bytes, not characters
 		}
 		return areaSize;
 	}

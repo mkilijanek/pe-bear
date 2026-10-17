@@ -232,7 +232,7 @@ void  PeHandler::undoDisplayOffset()
 {
 	if (this->prevOffsets.size() == 0) return;
 
-	uint32_t prevOff =  this->prevOffsets.top();
+	offset_t prevOff = this->prevOffsets.top();
 	this->prevOffsets.pop();
 	this->displayedOffset = prevOff;
 //	emit displayAreaModified(this->displayedOffset, this->displayedSize);
@@ -469,6 +469,7 @@ bool PeHandler::copyVirtualSizesToRaw()
 SectionHdrWrapper* PeHandler::addSection(QString name, bufsize_t rSize, bufsize_t vSize) //throws exception
 {
 	SectionHdrWrapper* newSec = nullptr;
+	const size_t operationsBefore = this->modifHndl.countOperations();
 	try {
 		offset_t modOffset = this->optHdrWrapper.getFieldOffset(OptHdrWrapper::IMAGE_SIZE);
 		bufsize_t modSize = this->optHdrWrapper.getFieldSize(OptHdrWrapper::IMAGE_SIZE);
@@ -488,12 +489,13 @@ SectionHdrWrapper* PeHandler::addSection(QString name, bufsize_t rSize, bufsize_
 		
 		newSec = m_PE->addNewSection(name, rSize, vSize);
 	} catch (const CustomException &e) {
-		this->modifHndl.unStoreLast();
+		// roll back what was already changed (i.e. SizeOfImage), using the backup made above
+		if (this->modifHndl.countOperations() > operationsBefore) this->unModify();
 		throw (e); // rethrow the exception to exit from the function
 	}
 
 	if (!newSec) { // in case if adding section has failed, but not because of an exception thrown
-		this->modifHndl.unStoreLast();
+		if (this->modifHndl.countOperations() > operationsBefore) this->unModify();
 		throw CustomException("Cannot add new section!");
 	}
 	emit modified();
@@ -660,7 +662,7 @@ ImportEntryWrapper* PeHandler::_autoAddLibrary(const QString &name, size_t impor
 	const size_t kThunkSeries = separateOFT ? 2 : 1;
 	const size_t kThunkSeriesSize = kThunkSize * (importedFuncsCount + 1); // leave space for X thunks + terminator
 	const size_t kNameRecordPadding = kThunkSeriesSize * kThunkSeries; 
-	const size_t nameTotalSize = name.length() + 1; // name + string '\0' terminator
+	const size_t nameTotalSize = name.toUtf8().size() + 1; // name as written (UTF-8 bytes) + string '\0' terminator
 	while (true) {
 		BYTE *ptr = m_PE->getContentAt(nameOffset, nameTotalSize + kNameRecordPadding);
 		if (!ptr) {
@@ -750,6 +752,13 @@ bool PeHandler::autoAddImports(const ImportsAutoadderSettings &settings)
 	const QStringList dllsList = settings.dllFunctions.keys();
 	const size_t dllsCount = dllsList.size();
 	if (dllsCount == 0) return false;
+
+	for (auto itr = dllsList.begin(); itr != dllsList.end(); ++itr) {
+		if (!ImportsAutoadderSettings::isValidDllName(*itr)) {
+			throw CustomException("Invalid DLL name supplied: only printable ASCII is allowed");
+			return false;
+		}
+	}
 
 	const size_t kDllRecordsSpace = sizeof(IMAGE_IMPORT_DESCRIPTOR) * (dllsCount + 1); // space for Import descriptor for each needed DLL
 	const bool shouldMoveTable = (canAddImportsLib(dllsCount)) ? false : true;
@@ -915,7 +924,9 @@ ImportedFuncWrapper* PeHandler::_addImportFunc(ImportEntryWrapper *lib, bool con
 	{ //scope0
 		// create a temporary wrapper to check if adding a terminating record is possible:
 		ImportedFuncWrapper *nextFuncSpacer = new ImportedFuncWrapper(m_PE, lib, funcNum + 1);
-		if (nextFuncSpacer->getThunkValue()) {
+		bool isFtOk = false;
+		const uint64_t ftValue = nextFuncSpacer->getNumValue(ImportedFuncWrapper::THUNK, &isFtOk);
+		if (nextFuncSpacer->getThunkValue() || (isFtOk && ftValue)) {
 			// not an empty space
 			delete nextFuncSpacer;
 			return NULL;
@@ -926,22 +937,37 @@ ImportedFuncWrapper* PeHandler::_addImportFunc(ImportEntryWrapper *lib, bool con
 
 	ImportedFuncWrapper *nextFunc = NULL;
 	bool isSet = false;
+	bool isBackedUp = false;
 
 	{ //scope1
 		// create a temporary wrapper to help filling in the space:
 		nextFunc = new ImportedFuncWrapper(m_PE, lib, funcNum);
-		offset_t offset = nextFunc->getFieldOffset(ImportEntryWrapper::FIRST_THUNK);
-		bufsize_t fieldSize = nextFunc->getFieldSize(ImportEntryWrapper::FIRST_THUNK);
+		// claim the slot in the First Thunk array:
+		offset_t offset = nextFunc->getFieldOffset(ImportedFuncWrapper::THUNK);
+		bufsize_t fieldSize = nextFunc->getFieldSize(ImportedFuncWrapper::THUNK);
 
-		if (offset && fieldSize) {
-			backupModification(offset, fieldSize, continueLastOperation);
-			isSet = nextFunc->setNumValue(ImportEntryWrapper::FIRST_THUNK, (-1));
+		if (offset && offset != INVALID_ADDR && fieldSize) {
+			isBackedUp = this->modifHndl.backupModification(offset, fieldSize, continueLastOperation);
+			if (isBackedUp) {
+				isSet = nextFunc->setNumValue(ImportedFuncWrapper::THUNK, (-1));
+			}
+		}
+		// ...and the parallel one in the Original First Thunk array, if the library has it:
+		const offset_t origOffset = nextFunc->getFieldOffset(ImportedFuncWrapper::ORIG_THUNK);
+		const bufsize_t origSize = nextFunc->getFieldSize(ImportedFuncWrapper::ORIG_THUNK);
+		if (isSet && origOffset && origOffset != INVALID_ADDR && origOffset != offset && origSize) {
+			// the First Thunk slot is already claimed: a twin that cannot be backed up fails the call, and the undo below runs
+			isSet = this->modifHndl.backupModification(origOffset, origSize, true)
+				&& nextFunc->setNumValue(ImportedFuncWrapper::ORIG_THUNK, (-1));
 		}
 	} //!scope1
 	
 	if (!isSet) {
 		delete nextFunc; nextFunc = NULL;
-		this->undoLastModification();
+		// undo only an operation this call is part of: if it was to start one and stored nothing, the top of the stack is an unrelated, earlier edit
+		if (isBackedUp || continueLastOperation) {
+			this->undoLastModification();
+		}
 		throw CustomException("Failed to add imported function!");
 		return NULL;
 	}
