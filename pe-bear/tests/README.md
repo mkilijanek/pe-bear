@@ -30,6 +30,7 @@ Everything runs offline and headless, in well under a second.
 | `tst_dumpfilename` | file names for section dumps: no path or stream characters, one per section |
 | `tst_addsection` | a failed "add section" is rolled back, not half applied |
 | `tst_importfunc` | "add function" claims and backs up both thunk slots |
+| `tst_importwizard` | the imports wizard refuses DLL names it cannot size |
 
 ## Fixtures are synthesised, not committed
 
