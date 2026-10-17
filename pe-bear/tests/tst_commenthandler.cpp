@@ -73,6 +73,7 @@ private slots:
 	void refusesToLoadAMissingFile();
 	void savingNothingCreatesNoFile();
 	void deletingEveryLoadedTagIsSaved();
+	void userDataNamesDependOnTheWholePath();
 };
 
 void TestCommentHandler::storesAndReturnsAComment()
@@ -347,6 +348,25 @@ void TestCommentHandler::deletingEveryLoadedTagIsSaved()
 	CommentHandler reader;
 	QVERIFY(loadAndWait(reader, path));
 	QCOMPARE(int(reader.commentsNum()), 0);
+}
+
+void TestCommentHandler::userDataNamesDependOnTheWholePath()
+{
+	/* The user data directory is flat: two samples called "sample.exe" in
+	   different directories must not read and overwrite one tag file. */
+	QTemporaryDir dir;
+	const QString first = QDir(dir.path()).absoluteFilePath("a/sample.exe");
+	const QString second = QDir(dir.path()).absoluteFilePath("b/sample.exe");
+
+	const QString firstName = CommentHandler::userDataFileName(first);
+	QVERIFY(firstName != CommentHandler::userDataFileName(second));
+	QCOMPARE(CommentHandler::userDataFileName(first), firstName);
+
+	/* still recognisable, and a plain file name */
+	QVERIFY(firstName.startsWith(QLatin1String("sample.exe.")));
+	QVERIFY(firstName.endsWith(QLatin1String(".tag")));
+	QVERIFY(!firstName.contains('/'));
+	QVERIFY(!firstName.contains('\\'));
 }
 
 QTEST_GUILESS_MAIN(TestCommentHandler)

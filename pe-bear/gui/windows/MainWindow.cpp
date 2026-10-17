@@ -1013,9 +1013,15 @@ bool MainWindow::loadTagsForPe(PeHandler *hndl, QString name)
 		//printf("Tags loaded from file directory\n");
 		return true;
 	}
-	name = this->mainSettings.userDataDir() + QDir::separator() + hndl->getShortName() + ".tag";
+	const QString udd = this->mainSettings.userDataDir() + QDir::separator();
+	name = udd + CommentHandler::userDataFileName(hndl->getFullName());
 	if (hndl->comments.loadFromFile(name)) {
 		//printf("Tags loaded from UDD\n");
+		return true;
+	}
+	// the name used by older versions: the short file name only, shared by all samples of that name
+	name = udd + hndl->getShortName() + ".tag";
+	if (hndl->comments.loadFromFile(name)) {
 		return true;
 	}
 	return true;
@@ -1027,7 +1033,7 @@ bool MainWindow::autoSaveTags(PeHandler *hndl)
 
 	QString name = hndl->getFullName() + ".tag";
 	if (this->mainSettings.userDataDir().size() > 0) {
-		name = this->mainSettings.userDataDir() + QDir::separator() + hndl->getShortName() + ".tag";
+		name = this->mainSettings.userDataDir() + QDir::separator() + CommentHandler::userDataFileName(hndl->getFullName());
 	}
 	if (hndl->comments.saveToFile(name)) {
 		//printf("Autosaved file");

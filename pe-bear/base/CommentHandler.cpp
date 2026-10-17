@@ -220,6 +220,13 @@ bool CommentHandler::isFileOk(QString fileName)
 	return true;
 }
 
+QString CommentHandler::userDataFileName(const QString &samplePath)
+{
+	const QFileInfo info(samplePath);
+	const QByteArray pathHash = QCryptographicHash::hash(info.absoluteFilePath().toUtf8(), QCryptographicHash::Sha1).toHex().left(16);
+	return info.fileName() + "." + QString::fromLatin1(pathHash) + ".tag";
+}
+
 bool CommentHandler::loadFromFile(QString fileName)
 {
 	if (this->t != NULL) return false;
