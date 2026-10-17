@@ -167,11 +167,19 @@ bool ResourcesDirSplitter::displayIcon(ResourceContentWrapper *resContent, const
 	const t_icon_hdr *iconHdr = NULL;
 	DWORD bitmapOffset = 0;
 	if (restype == pe::RESTYPE_CURSOR) {
+		if (contentSize <= sizeof(t_cursor_hdr)) {
+			return false;
+		}
 		const t_cursor_hdr *cursorHdr = (t_cursor_hdr *)content;
 		iconHdr = &cursorHdr->icons;
 		if (iconHdr) {
 			resOffset = sizeof(DWORD);
-			bitmapOffset = iconHdr->bitmap_offset + resOffset;
+			// computed in 64 bits: a bitmap_offset close to 4 GB must not wrap around to a small value
+			const ULONGLONG cursorBitmapOffset = (ULONGLONG)iconHdr->bitmap_offset + resOffset;
+			if (cursorBitmapOffset >= contentSize) {
+				return false;
+			}
+			bitmapOffset = (DWORD)cursorBitmapOffset;
 		}
 	} else {
 		iconHdr = (t_icon_hdr *)content;
@@ -221,7 +229,19 @@ bool ResourcesDirSplitter::displayIcon(ResourceContentWrapper *resContent, const
 		const char* bitmapPtr = (const char*)((ULONGLONG)content + bitmapOffset);
 		const size_t bitmapSize = contentSize - bitmapOffset;
 		
+		const DWORD maxDim = 1024;
+		if (dimW == 0 || dimH == 0 || dimW > maxDim || dimH > maxDim) {
+			return false;
+		}
 		arr.append(bitmapPtr, bitmapSize);
+
+		// QImage reads dimW * dimH * 4 bytes from the buffer, and the dimensions come straight
+		// from the resource header. A cursor's height also counts its mask, so even a valid one
+		// is shorter than that: fill up the rest with zeros (transparent) instead of reading past it
+		const ULONGLONG imgSize = (ULONGLONG)dimW * dimH * 4;
+		if (imgSize > bitmapSize) {
+			arr.append(QByteArray(int(imgSize - bitmapSize), '\0'));
+		}
 
 		QImage img = QImage((const uchar *)arr.constData(), dimW, dimH, QImage::Format_ARGB32);
 		QPixmap mpix = QPixmap::fromImage(img.mirrored(false, true));

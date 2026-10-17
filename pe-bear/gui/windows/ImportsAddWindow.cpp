@@ -2,7 +2,7 @@
 
 ImportsAddWindow::ImportsAddWindow(ImportsAutoadderSettings& _settings, QWidget *parent)
 	: QDialog(parent, Qt::Dialog), settings(_settings),
-	funcNameValidator(NULL),
+	dllNameValidator(NULL), funcNameValidator(NULL),
 	tableModel(NULL), ui_elementsView(NULL)
 {
 	setWindowFlags(Qt::Dialog);
@@ -35,6 +35,9 @@ ImportsAddWindow::ImportsAddWindow(ImportsAutoadderSettings& _settings, QWidget 
 
 	propertyLayout1.addWidget(&funcNameLabel);
 	propertyLayout2.addWidget(&funcNameEdit);
+
+	dllNameValidator = new QRegularExpressionValidator(QRegularExpression("[\\x20-\\x7E]{1,}"), this); // printable ASCII
+	dllNameEdit.setValidator(dllNameValidator);
 
 	funcNameValidator = new QRegularExpressionValidator(QRegularExpression("[0-9A-Za-z._#@?-]{1,}"));
 	funcNameEdit.setValidator(funcNameValidator);
