@@ -42,6 +42,11 @@ set(deps_modification
 	${PB}/base/Modification.cpp
 )
 
+# pure logic, needs nothing but Qt Core
+set(deps_dumpfilename
+	${PB}/base/DumpFileName.cpp
+)
+
 set(deps_commenthandler
 	${PB}/base/CommentHandler.cpp
 )
@@ -54,6 +59,11 @@ set(deps_stringscollection
 # the generic tree model: QtWidgets, but no PE
 set(deps_treemodel
 	${PB}/gui/TreeModel.cpp
+)
+
+# the Compare window's hex model: QtWidgets, but no PE
+set(deps_hexdiffmodel
+	${PB}/gui/HexDiffModel.cpp
 )
 
 # the concrete PE views pull in the whole non-window half of the application
@@ -106,6 +116,15 @@ list(APPEND deps_pemodels
 	${PB}/DateDisplay.cpp
 )
 
+# the Compare window: the PE views plus the window and its own models
+set(deps_diffwindow
+	${deps_pemodels}
+	${PB}/PEFileTreeModel.cpp
+	${PB}/HexCompareView.cpp
+	${PB}/gui/HexDiffModel.cpp
+	${PB}/gui/windows/DiffWindow.cpp
+)
+
 # --- test targets: name -> extra sources ---
 set(pebear_tests
 	tst_minimalpe
@@ -115,6 +134,16 @@ set(pebear_tests
 	tst_stringscollection
 	tst_treemodel
 	tst_pemodels
+	tst_hexdiffmodel
+	tst_debugmodel
+	tst_cdisasm
+	tst_diffwindow
+	tst_imphash
+	tst_dumpfilename
+	tst_addsection
+	tst_importwizard
+	tst_importfunc
+	tst_importfuncundo
 )
 
 foreach(test_name ${pebear_tests})
@@ -128,8 +157,14 @@ foreach(test_name ${pebear_tests})
 		set(test_deps ${deps_stringscollection})
 	elseif(test_name STREQUAL "tst_treemodel")
 		set(test_deps ${deps_treemodel})
-	elseif(test_name STREQUAL "tst_pemodels")
+	elseif(test_name STREQUAL "tst_hexdiffmodel")
+		set(test_deps ${deps_hexdiffmodel})
+	elseif(test_name STREQUAL "tst_dumpfilename")
+		set(test_deps ${deps_dumpfilename})
+	elseif(test_name STREQUAL "tst_pemodels" OR test_name STREQUAL "tst_debugmodel" OR test_name STREQUAL "tst_imphash" OR test_name STREQUAL "tst_addsection" OR test_name STREQUAL "tst_importwizard" OR test_name STREQUAL "tst_importfunc" OR test_name STREQUAL "tst_importfuncundo")
 		set(test_deps ${deps_pemodels})
+	elseif(test_name STREQUAL "tst_diffwindow")
+		set(test_deps ${deps_diffwindow})
 	else()
 		set(test_deps "")
 	endif()
