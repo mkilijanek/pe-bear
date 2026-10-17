@@ -142,6 +142,7 @@ set(pebear_tests
 	tst_dumpfilename
 	tst_addsection
 	tst_importwizard
+	tst_importfunc
 	tst_importfuncundo
 )
 
@@ -160,7 +161,7 @@ foreach(test_name ${pebear_tests})
 		set(test_deps ${deps_hexdiffmodel})
 	elseif(test_name STREQUAL "tst_dumpfilename")
 		set(test_deps ${deps_dumpfilename})
-	elseif(test_name STREQUAL "tst_pemodels" OR test_name STREQUAL "tst_debugmodel" OR test_name STREQUAL "tst_imphash" OR test_name STREQUAL "tst_addsection" OR test_name STREQUAL "tst_importwizard" OR test_name STREQUAL "tst_importfuncundo")
+	elseif(test_name STREQUAL "tst_pemodels" OR test_name STREQUAL "tst_debugmodel" OR test_name STREQUAL "tst_imphash" OR test_name STREQUAL "tst_addsection" OR test_name STREQUAL "tst_importwizard" OR test_name STREQUAL "tst_importfunc" OR test_name STREQUAL "tst_importfuncundo")
 		set(test_deps ${deps_pemodels})
 	elseif(test_name STREQUAL "tst_diffwindow")
 		set(test_deps ${deps_diffwindow})
