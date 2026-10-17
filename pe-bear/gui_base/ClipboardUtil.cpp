@@ -32,6 +32,7 @@ QByteArray ClipboardUtil::getHexClip()
 QByteArray ClipboardUtil::getOctetStreamClip()
 {
 	const QMimeData *mimeData = QApplication::clipboard()->mimeData();
+	if (!mimeData) return QByteArray(); // the platform may have nothing to give
 	return mimeData->data("application/octet-stream");
 }
 

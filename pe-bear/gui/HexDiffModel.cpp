@@ -96,14 +96,14 @@ void HexDiffModel::onGoToNextDiff()
 	if (contentSize[RIGHT] < this->startOff) return;
 
 	offset_t offset = this->startOff;
-	int leftSize = contentSize[LEFT] - offset;
-	int rightSize = contentSize[RIGHT] - offset;
+	bufsize_t leftSize = contentSize[LEFT] - offset;
+	bufsize_t rightSize = contentSize[RIGHT] - offset;
 
 	bufsize_t diff = HexDiffModel::getDiffStart(
 		&contentPtr[LEFT][this->startOff],
-		contentSize[LEFT],
+		leftSize,
 		&contentPtr[RIGHT][this->startOff],
-		contentSize[RIGHT]
+		rightSize
 	);
 	
 	if (diff == DIFF_NOT_FOUND) return;

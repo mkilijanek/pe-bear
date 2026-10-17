@@ -22,6 +22,7 @@
 #include "base/MainSettings.h"
 #include "gui/pe_models/ImportsTreeModel.h"
 #include "gui/pe_models/ExceptionTreeModel.h"
+#include "gui/pe_models/DebugTreeModel.h"
 
 namespace {
 
@@ -149,6 +150,7 @@ private slots:
 	void exceptionModelShowsOnePageAtATime();
 	void exceptionModelStaysWithinRangeWhenThePageSizeChanges();
 	void exceptionModelWithFewRecordsIsASinglePage();
+	void debugEntryModelStartsAtTheFirstEntry();
 
 	void headerViewsExposeTheirFields();
 	void sectionModelReportsTheSectionCount();
@@ -555,6 +557,38 @@ void TestPeModels::exceptionModelWithFewRecordsIsASinglePage()
 	QCOMPARE(none.totalCount(), 0);
 	QCOMPARE(none.pagesCount(), 0);
 	QCOMPARE(none.rowCount(QModelIndex()), 0);
+}
+
+namespace {
+
+	/** Exposes the protected id of the debug entry the model shows. */
+	class ParentIdDebugEntry : public DebugRDSIEntryTreeModel
+	{
+	public:
+		explicit ParentIdDebugEntry(PeHandler *h) : DebugRDSIEntryTreeModel(h, NULL) {}
+		size_t currentParentId() const { return parentId; }
+	};
+
+}; // namespace
+
+void TestPeModels::debugEntryModelStartsAtTheFirstEntry()
+{
+	/* Until the first selection in the Debug view calls setParentId(), the
+	   model reads debugDirWrapper.getEntryAt(parentId). Like its siblings
+	   (RelocsTreeModel, LdConfigTreeModel, ResourcesTreeModel) it has to start
+	   at entry 0, not at whatever the memory under it held. Constructed over
+	   storage filled with a pattern, so a member the constructor skips shows
+	   up as that pattern instead of happening to be zero. */
+	PeFixture fixture;
+	QVERIFY2(fixture.isValid(), qPrintable(fixture.error()));
+
+	alignas(ParentIdDebugEntry) unsigned char storage[sizeof(ParentIdDebugEntry)];
+	::memset(storage, 0xA5, sizeof(storage));
+	ParentIdDebugEntry *model = new (storage) ParentIdDebugEntry(fixture.handler());
+	const size_t id = model->currentParentId();
+	model->~ParentIdDebugEntry();
+
+	QCOMPARE(id, size_t(0));
 }
 
 QTEST_MAIN(TestPeModels)

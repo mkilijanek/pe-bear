@@ -55,16 +55,13 @@ void CommentHandler::LoaderThread::loadFromQFile(QString path)
 		QMutexLocker locker(&m_readMutex);
 		if (isBreakReading) break;
 		
-		QString &line = itr->second;
-		offset_t offset = itr->first;
-		
-		cmntHndl->_insertComment(offset, line);
+		// only collected here: the handler is modified on its own thread, in onLoaded()
+		loadedComments[itr->first] = itr->second;
 	}
 }
 
 void CommentHandler::LoaderThread::run()
 {
-	isBreakReading = false;
 	loadFromQFile(this->fPath);
 	//printf("thread stopped\n");
 }
@@ -184,8 +181,31 @@ size_t CommentHandler::getCommentsNum()
 	return size;
 }
 
+bool CommentHandler::getCommentByIndex(size_t indx, Comment &out)
+{
+	QMutexLocker ml(&m_loadMutex);
+
+	if (indx >= this->commentsVec.size()) return false;
+	const Comment *cmnt = this->commentsVec[indx];
+	if (!cmnt) return false;
+
+	out = *cmnt;
+	return true;
+}
+
 void CommentHandler::onLoaded()
 {
+	// the tags now come from a file: saving an empty set must overwrite it
+	this->isLoaded = true;
+	if (this->t) {
+		this->t->wait();
+		QMutexLocker ml(&m_loadMutex);
+
+		std::map<offset_t, QString>::iterator itr;
+		for (itr = t->loadedComments.begin(); itr != t->loadedComments.end(); ++itr) {
+			_insertComment(itr->first, itr->second);
+		}
+	}
 	// delete loader thread:
 	delete this->t;
 	this->t = NULL;
@@ -198,6 +218,13 @@ bool CommentHandler::isFileOk(QString fileName)
 	if (fIn.open(QFile::ReadOnly | QFile::Text) == false) return false;
 	fIn.close();
 	return true;
+}
+
+QString CommentHandler::userDataFileName(const QString &samplePath)
+{
+	const QFileInfo info(samplePath);
+	const QByteArray pathHash = QCryptographicHash::hash(info.absoluteFilePath().toUtf8(), QCryptographicHash::Sha1).toHex().left(16);
+	return info.fileName() + "." + QString::fromLatin1(pathHash) + ".tag";
 }
 
 bool CommentHandler::loadFromFile(QString fileName)
