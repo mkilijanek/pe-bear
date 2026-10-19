@@ -352,13 +352,6 @@ if(MSVC)
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /MP")
 endif()
 
-IF (WIN32)
-	IF(NOT SHOW_CONSOLE)
-		#console hidden
-		set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /SUBSYSTEM:WINDOWS /ENTRY:mainCRTStartup")
-	ENDIF()
-ENDIF()
-
 # COMMIT_HASH reaches the code as a string literal. AppVeyor passes it with
 # the quotes already embedded ("\"<sha>\""); a plain -DCOMMIT_HASH=<sha> used
 # to reach the compiler bare, where a hash beginning with a digit is an
@@ -410,6 +403,20 @@ IF(MACOSX)
 	)
 ELSE()
 	add_executable (${PROJECT_NAME} ${rsrc} ${pebear_hdrs} ${pebear_srcs} ${pebear_hdrs_moc} ${pebear_rcc_src} )
+ENDIF()
+
+IF (WIN32)
+	IF(NOT SHOW_CONSOLE)
+		# console hidden: a GUI-subsystem binary, on this target only. These
+		# used to be added to CMAKE_EXE_LINKER_FLAGS, which every executable
+		# in the subdirectories inherited and then had to strip again.
+		set_target_properties(${PROJECT_NAME} PROPERTIES WIN32_EXECUTABLE ON)
+		IF(MSVC)
+			# Still entered through main(), as before: the CRT's console entry
+			# point does not need a WinMain, so nothing depends on Qt's.
+			set_property(TARGET ${PROJECT_NAME} APPEND_STRING PROPERTY LINK_FLAGS " /ENTRY:mainCRTStartup")
+		ENDIF()
+	ENDIF()
 ENDIF()
 
 target_link_libraries( ${PROJECT_NAME} ${SIGFIND_LIB} ${PARSER_LIB} )

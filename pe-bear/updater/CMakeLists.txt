@@ -185,14 +185,6 @@ SOURCE_GROUP("Header Files\\updater" FILES ${update_core_hdrs})
 # a worse thing to ship than not shipping it: a build that cannot install
 # updates should not place an installer next to the application.
 if(PEBEAR_LIBARCHIVE_FOUND)
-	if(MSVC)
-		# The application is a GUI subsystem binary; this is not. Inherited
-		# from the parent directory, so it has to be taken back off here, or
-		# the helper gets /ENTRY:mainCRTStartup and no console to report to.
-		string(REPLACE "/SUBSYSTEM:WINDOWS" "" CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS}")
-		string(REPLACE "/ENTRY:mainCRTStartup" "" CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS}")
-	endif()
-
 	add_executable(pe-bear-updater helper/main.cpp)
 	target_link_libraries(pe-bear-updater PRIVATE pebear_update_core)
 
