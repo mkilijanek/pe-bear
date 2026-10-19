@@ -1,0 +1,13 @@
+# The workflows pin every action by commit SHA (with the version in a
+# comment), so a moved or re-pointed tag cannot change what runs. Dependabot
+# keeps those pins current: it opens a PR that updates the SHA and the
+# comment together.
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      github-actions:
+        patterns: [ "*" ]
