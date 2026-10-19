@@ -1,6 +1,14 @@
 cmake_minimum_required (VERSION 3.12)
 project (PE-bear_full)
 
+# Qt6 needs C++17. Without a set standard each target got whatever its
+# compiler defaults to: on MSVC that is C++14 for the targets that do not
+# link Qt6 (sig_finder), and GCC and Clang move their default between
+# releases. Set before the subdirectories so every C++ target gets the same
+# one; capstone is C and is not affected.
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
 # modules:
 set ( M_SIGFIND "sig_finder/sig_finder" )
 set ( M_BEARPARSER "bearparser/parser" )
@@ -12,6 +20,7 @@ option(USE_QT5 "Use Qt5" OFF )
 option(SHOW_CONSOLE "Show debug console" OFF )
 option(PEBEAR_BUILD_TESTS "Build the unit tests and model checks" OFF )
 option(PEBEAR_HARDENING "Build PE-bear's own code with warnings and exploit mitigations (cmake/Hardening.cmake)" ON )
+option(PEBEAR_BUILD_FUZZERS "Build the libFuzzer targets in fuzz/ (Clang only; instruments the whole build)" OFF )
 
 if(PEBEAR_BUILD_TESTS)
 	# must be called from the top level so that ctest finds the cases
@@ -52,7 +61,6 @@ option(CAPSTONE_ARM64_SUPPORT "ARM64 support" ON)
 option(CAPSTONE_MIPS_SUPPORT "MIPS support" OFF)
 option(CAPSTONE_PPC_SUPPORT "PowerPC support" OFF)
 option(CAPSTONE_SPARC_SUPPORT "Sparc support" OFF)
-option(CAPSTONE_SYSZ_SUPPORT "SystemZ support" OFF)
 option(CAPSTONE_XCORE_SUPPORT "XCore support" OFF)
 option(CAPSTONE_TRICORE_SUPPORT "TriCore support" OFF)
 
@@ -87,6 +95,25 @@ endif()
 # Capstone v6 builds its fuzzer unconditionally; keep it out of 'all'
 if(TARGET fuzz_disasm)
     set_target_properties(fuzz_disasm PROPERTIES EXCLUDE_FROM_ALL TRUE)
+endif()
+
+# A fuzzing build is its own build directory: every library is compiled with
+# libFuzzer's coverage hooks and the sanitizers, so that what the fuzzer
+# reaches is both guided and checked. Added before the subdirectories, so
+# capstone, bearparser and the rest all get it.
+if(PEBEAR_BUILD_FUZZERS)
+	if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR NOT CMAKE_C_COMPILER_ID MATCHES "Clang")
+		message(FATAL_ERROR "PEBEAR_BUILD_FUZZERS needs Clang for C and C++ (libFuzzer): -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++")
+	endif()
+	set(PEBEAR_FUZZ_SANITIZERS "address,undefined" CACHE STRING "Sanitizers for the fuzzing build (-fsanitize=)")
+	# -fno-sanitize-recover: a UBSan report has to stop the run, or libFuzzer
+	# never sees it as a crash. -fno-sanitize=alignment: bearparser reads
+	# every field through a cast pointer into the file buffer
+	# (AbstractByteBuffer.cpp:293 and the packed header structs), so the
+	# very first input stops on a misaligned load, which x86 and ARM64
+	# handle in hardware; the remaining checks are what the fuzzer is for.
+	add_compile_options(-fsanitize=fuzzer-no-link,${PEBEAR_FUZZ_SANITIZERS} -fno-sanitize=alignment -fno-sanitize-recover=undefined -fno-omit-frame-pointer -g)
+	set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fsanitize=${PEBEAR_FUZZ_SANITIZERS}")
 endif()
 
 # Add sub-directories
@@ -141,6 +168,10 @@ set(PEBEAR_MIN_OS_VERSION "" CACHE STRING "Lowest OS version this build supports
 
 # executables
 add_subdirectory(pe-bear)
+
+if(PEBEAR_BUILD_FUZZERS)
+	add_subdirectory(fuzz)
+endif()
 
 add_dependencies(libdisasm bearparser capstone_static)
 add_dependencies(PE-bear bearparser sig_finder libdisasm capstone_static)
