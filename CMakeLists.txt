@@ -1,6 +1,14 @@
 cmake_minimum_required (VERSION 3.12)
 project (PE-bear_full)
 
+# Qt6 needs C++17. Without a set standard each target got whatever its
+# compiler defaults to: on MSVC that is C++14 for the targets that do not
+# link Qt6 (sig_finder), and GCC and Clang move their default between
+# releases. Set before the subdirectories so every C++ target gets the same
+# one; capstone is C and is not affected.
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
 # modules:
 set ( M_SIGFIND "sig_finder/sig_finder" )
 set ( M_BEARPARSER "bearparser/parser" )
