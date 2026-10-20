@@ -32,6 +32,7 @@ Everything runs offline and headless, in well under a second.
 | `tst_importfunc` | "add function" claims and backs up both thunk slots |
 | `tst_importwizard` | the imports wizard refuses DLL names it cannot size |
 | `tst_importfuncundo` | a failed "add function" does not undo an unrelated edit |
+| `tst_tinype` | a PE smaller than its own headers (no sections, code in the headers) opens and disassembles at the entry point |
 
 ## Fixtures are synthesised, not committed
 
