@@ -1,5 +1,5 @@
-# capstone stays on upstream on purpose: the pinned commit (8f917b9,
-# 6.0.0-Alpha10-45) is on capstone's v6 line, which renamed CS_ARCH_ARM64 to
+# capstone stays on upstream on purpose: the pinned commit (d01f16f,
+# 6.0.0-Alpha11-33) is on capstone's v6 line, which renamed CS_ARCH_ARM64 to
 # CS_ARCH_AARCH64 and is what disasm/ is written against. The fork of
 # capstone predates 5.0 and does not contain that commit, so pointing the
 # submodule at it would break the build.
