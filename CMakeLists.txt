@@ -19,6 +19,7 @@ option(USE_QT4 "Use Qt4" OFF )
 option(USE_QT5 "Use Qt5" OFF )
 option(SHOW_CONSOLE "Show debug console" OFF )
 option(PEBEAR_BUILD_TESTS "Build the unit tests and model checks" OFF )
+option(PEBEAR_HARDENING "Build PE-bear's own code with warnings and exploit mitigations (cmake/Hardening.cmake)" ON )
 option(PEBEAR_BUILD_FUZZERS "Build the libFuzzer targets in fuzz/ (Clang only; instruments the whole build)" OFF )
 
 if(PEBEAR_BUILD_TESTS)
@@ -119,8 +120,27 @@ endif()
 #
 # libs
 
+if(PEBEAR_HARDENING)
+	# Position-independent executables, so that ASLR covers the image itself.
+	# Most toolchains already default to it; this makes it hold everywhere.
+	# Set before capstone: a PIE can only link position-independent objects.
+	# CMP0083 (CMake 3.14) is what makes CMake pass -pie at link time; the
+	# _DEFAULT_ variable carries it into the subprojects, whose
+	# cmake_minimum_required(3.12) would otherwise leave it unset.
+	set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+	if(POLICY CMP0083)
+		cmake_policy(SET CMP0083 NEW)
+		set(CMAKE_POLICY_DEFAULT_CMP0083 NEW)
+		include(CheckPIESupported)
+		check_pie_supported()
+	endif()
+endif()
+
 add_subdirectory(${M_CAPSTONE})
 set(CAPSTONE_LIB $<TARGET_FILE:capstone_static> CACHE PATH "Capstone library path")
+
+# warnings and mitigations for everything added from here on, not capstone
+include(cmake/Hardening.cmake)
 
 add_subdirectory(${M_BEARPARSER})
 set(PARSER_LIB $<TARGET_FILE:bearparser> CACHE PATH "BearParser library path")
