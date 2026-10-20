@@ -32,6 +32,7 @@ Everything runs offline and headless, in well under a second.
 | `tst_importfunc` | "add function" claims and backs up both thunk slots |
 | `tst_importwizard` | the imports wizard refuses DLL names it cannot size |
 | `tst_importfuncundo` | a failed "add function" does not undo an unrelated edit |
+| `tst_resourceloop` | self-referencing and shared resource directories are expanded once, without losing leaves of a well-formed tree |
 
 ## Fixtures are synthesised, not committed
 
