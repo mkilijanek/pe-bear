@@ -1,3 +1,4 @@
+<!-- markdownlint-disable MD043 -->
 # PE-bear updater
 
 Native update discovery for PE-bear, built on the GitHub Releases API.

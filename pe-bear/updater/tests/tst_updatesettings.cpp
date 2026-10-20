@@ -122,17 +122,17 @@ void TestUpdateSettings::survivesARoundTripThroughQSettings()
 	written.setSkippedVersion(Version::fromString(QLatin1String("0.9.1")));
 
 	QSettings settings;
-	written.write(settings);
+	written.save(settings);
 	settings.sync();
 
-	UpdateSettings read;
-	read.read(settings);
+	UpdateSettings loaded;
+	loaded.load(settings);
 
-	QCOMPARE(read.isAutoCheckEnabled(), false);
-	QCOMPARE(read.isAutoDownloadEnabled(), true);
-	QCOMPARE(read.checkIntervalHours(), 12);
-	QCOMPARE(read.lastCheck(), when);
-	QCOMPARE(read.skippedVersion(), QString("0.9.1"));
+	QCOMPARE(loaded.isAutoCheckEnabled(), false);
+	QCOMPARE(loaded.isAutoDownloadEnabled(), true);
+	QCOMPARE(loaded.checkIntervalHours(), 12);
+	QCOMPARE(loaded.lastCheck(), when);
+	QCOMPARE(loaded.skippedVersion(), QString("0.9.1"));
 }
 
 void TestUpdateSettings::ignoresACorruptStoredVersion()
@@ -144,7 +144,7 @@ void TestUpdateSettings::ignoresACorruptStoredVersion()
 	settings.sync();
 
 	UpdateSettings s;
-	s.read(settings);
+	s.load(settings);
 	QVERIFY2(s.skippedVersion().isEmpty(), "a corrupt stored version was trusted");
 }
 
@@ -205,12 +205,12 @@ void TestUpdateSettings::repositorySurvivesARoundTripAndACorruptValueIsDropped()
 	UpdateSettings written;
 	QVERIFY(written.setRepository(QLatin1String("mkilijanek/pe-bear")));
 	QSettings settings;
-	written.write(settings);
+	written.save(settings);
 	settings.sync();
 
-	UpdateSettings read;
-	read.read(settings);
-	QCOMPARE(read.repository(), QString("mkilijanek/pe-bear"));
+	UpdateSettings loaded;
+	loaded.load(settings);
+	QCOMPARE(loaded.repository(), QString("mkilijanek/pe-bear"));
 
 	/* Edited by hand into something that is not a repository: dropped,
 	   so the build's default is used, rather than trusted. */
@@ -219,7 +219,7 @@ void TestUpdateSettings::repositorySurvivesARoundTripAndACorruptValueIsDropped()
 	settings.endGroup();
 	settings.sync();
 	UpdateSettings again;
-	again.read(settings);
+	again.load(settings);
 	QVERIFY(again.repository().isEmpty());
 }
 
