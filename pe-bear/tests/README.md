@@ -33,6 +33,7 @@ Everything runs offline and headless, in well under a second.
 | `tst_importwizard` | the imports wizard refuses DLL names it cannot size |
 | `tst_importfuncundo` | a failed "add function" does not undo an unrelated edit |
 | `tst_resourceloop` | self-referencing and shared resource directories are expanded once, without losing leaves of a well-formed tree |
+| `tst_tinype` | a PE smaller than its own headers (no sections, code in the headers) opens and disassembles at the entry point |
 
 ## Fixtures are synthesised, not committed
 

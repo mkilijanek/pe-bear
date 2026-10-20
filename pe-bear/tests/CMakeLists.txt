@@ -132,6 +132,7 @@ set(pebear_tests
 	tst_importfunc
 	tst_importfuncundo
 	tst_resourceloop
+	tst_tinype
 )
 
 foreach(test_name ${pebear_tests})
