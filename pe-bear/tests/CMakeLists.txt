@@ -131,6 +131,7 @@ set(pebear_tests
 	tst_importwizard
 	tst_importfunc
 	tst_importfuncundo
+	tst_resourceloop
 	tst_tinype
 )
 
